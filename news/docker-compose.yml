@@ -28,24 +28,24 @@ services:
       timeout: 5s
       retries: 10
 
-  news-service:
-    build: .
-    container_name: news-service
-    environment:
-      MYSQL_HOST: mysql
-      MYSQL_PORT: 3306
-      MYSQL_DATABASE: news
-      MYSQL_USER: news
-      MYSQL_PASSWORD: news123
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-    ports:
-      - "8080:8080"
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+#  news-service:
+#    build: .
+#    container_name: news-service
+#    environment:
+#      MYSQL_HOST: mysql
+#      MYSQL_PORT: 3306
+#      MYSQL_DATABASE: news
+#      MYSQL_USER: news
+#      MYSQL_PASSWORD: news123
+#      REDIS_HOST: redis
+#      REDIS_PORT: 6379
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+#      mysql:
+#        condition: service_healthy
+#      redis:
+#        condition: service_healthy
 
 volumes:
   mysql-data:
