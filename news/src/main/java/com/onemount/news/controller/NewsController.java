@@ -34,9 +34,10 @@ public class NewsController {
 
     @GetMapping
     public ResponseEntity<BaseResponse<NewsListResponse>> getNews(
+            @RequestParam(value = "keyword", required = false) String keyword,
             @RequestParam(value = "pageNo", defaultValue = "0") int pageNo,
             @RequestParam(value = "pageSize", defaultValue = "10") int pageSize) {
-        return ResponseEntity.ok(BaseResponse.success(newsService.getNews(pageNo, pageSize)));
+        return ResponseEntity.ok(BaseResponse.success(newsService.getNews(keyword, pageNo, pageSize)));
     }
 
     @GetMapping("/{id}")

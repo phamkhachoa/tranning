@@ -33,6 +33,15 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(status).body(BaseResponse.error(status.value(), message));
     }
 
+    @ExceptionHandler(NotImplementedException.class)
+    public ResponseEntity<BaseResponse<Void>> handleNotImplementedException(
+            NotImplementedException ex, WebRequest request) {
+        HttpStatus status = HttpStatus.NOT_IMPLEMENTED;
+        String message = ex.getMessage();
+        LOG.warn(ERROR_LOG_FORMAT, getServletPath(request), status.value(), message);
+        return ResponseEntity.status(status).body(BaseResponse.error(status.value(), message));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<BaseResponse<Void>> handleMethodArgumentNotValid(MethodArgumentNotValidException ex) {
         List<String> errors = ex.getBindingResult().getFieldErrors().stream()

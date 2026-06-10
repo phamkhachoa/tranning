@@ -3,23 +3,17 @@ package com.onemount.news.service;
 import com.onemount.news.dto.NewsListResponse;
 import com.onemount.news.dto.NewsRequest;
 import com.onemount.news.dto.NewsResponse;
-import com.onemount.news.dto.NewsSummaryResponse;
 import com.onemount.news.exception.BadRequestException;
-import com.onemount.news.exception.NotFoundException;
+import com.onemount.news.exception.NotImplementedException;
 import com.onemount.news.mapper.NewsMapper;
 import com.onemount.news.model.News;
 import com.onemount.news.repository.NewsRepository;
 import com.onemount.news.utils.Constants;
 import java.text.Normalizer;
-import java.util.List;
 import java.util.Locale;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -39,25 +33,20 @@ public class NewsService {
     }
 
     @Transactional(readOnly = true)
-    public NewsListResponse getNews(int pageNo, int pageSize) {
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by(Sort.Direction.DESC, "createdOn"));
-        Page<News> newsPage = newsRepository.findAll(pageable);
-        List<NewsSummaryResponse> newsSummaries = newsMapper.toSummaryResponses(newsPage.getContent());
-        return new NewsListResponse(
-                newsSummaries,
-                newsPage.getNumber(),
-                newsPage.getSize(),
-                newsPage.getTotalElements(),
-                newsPage.getTotalPages(),
-                newsPage.isLast());
+    public NewsListResponse getNews(String keyword, int pageNo, int pageSize) {
+        // TODO trainee: implement list API with pagination and sort by createdOn DESC.
+        // TODO trainee: when keyword has text, support approximate title search, for example title LIKE %keyword%.
+        // TODO trainee: map entities to NewsSummaryResponse via NewsMapper and wrap metadata in NewsListResponse.
+        throw new NotImplementedException("TODO: implement list news API with keyword fuzzy search by title.");
     }
 
     @Transactional(readOnly = true)
     @Cacheable(cacheNames = NEWS_CACHE, key = "#id")
     public NewsResponse getNewsById(Long id) {
-        News news = newsRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException(Constants.ErrorCode.NEWS_NOT_FOUND, id));
-        return newsMapper.toResponse(news);
+        // TODO trainee: implement detail API by id, throw NotFoundException when missing.
+        // TODO trainee: keep @Cacheable so repeated detail requests are served from Redis cache.
+        // TODO trainee: map the entity to NewsResponse via NewsMapper.
+        throw new NotImplementedException("TODO: implement news detail API with Redis cache.");
     }
 
     public NewsResponse createNews(NewsRequest newsRequest) {
@@ -72,23 +61,16 @@ public class NewsService {
 
     @CachePut(cacheNames = NEWS_CACHE, key = "#id")
     public NewsResponse updateNews(Long id, NewsRequest newsRequest) {
-        News news = newsRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException(Constants.ErrorCode.NEWS_NOT_FOUND, id));
-        String slug = resolveSlug(newsRequest);
-        if (newsRepository.existsBySlugAndIdNot(slug, id)) {
-            throw new BadRequestException(Constants.ErrorCode.SLUG_ALREADY_EXISTED, slug);
-        }
-        newsMapper.updateEntity(newsRequest, news);
-        news.setSlug(slug);
-        return newsMapper.toResponse(newsRepository.save(news));
+        // TODO trainee: implement update API by loading the existing news and validating duplicate slug.
+        // TODO trainee: update fields through NewsMapper.updateEntity, save, return NewsResponse.
+        // TODO trainee: keep @CachePut so the Redis cache is refreshed after a successful update.
+        throw new NotImplementedException("TODO: implement update news API and refresh Redis cache.");
     }
 
     @CacheEvict(cacheNames = NEWS_CACHE, key = "#id")
     public void deleteNews(Long id) {
-        if (!newsRepository.existsById(id)) {
-            throw new NotFoundException(Constants.ErrorCode.NEWS_NOT_FOUND, id);
-        }
-        newsRepository.deleteById(id);
+        // TODO trainee: implement delete API by checking existence, deleting the row, and evicting cache.
+        throw new NotImplementedException("TODO: implement delete news API and evict Redis cache.");
     }
 
     private String resolveSlug(NewsRequest newsRequest) {

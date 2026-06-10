@@ -50,11 +50,13 @@ Swagger UI: http://localhost:8080/swagger-ui.html
 
 | Method | Path             | Mô tả                                  |
 |--------|------------------|----------------------------------------|
-| GET    | `/api/news`      | Danh sách tin (phân trang `pageNo`, `pageSize`) |
-| GET    | `/api/news/{id}` | Chi tiết tin (cache Redis)             |
+| GET    | `/api/news`      | TODO: danh sách tin, nhận `keyword`, phân trang `pageNo`, `pageSize`, search gần đúng theo tiêu đề |
+| GET    | `/api/news/{id}` | TODO: chi tiết tin, áp dụng cache Redis |
 | POST   | `/api/news`      | Tạo tin mới (HTTP 201)                 |
-| PUT    | `/api/news/{id}` | Cập nhật tin, trả về tin sau khi sửa (cache put) |
-| DELETE | `/api/news/{id}` | Xoá tin (evict cache)                  |
+| PUT    | `/api/news/{id}` | TODO: cập nhật tin, trả về tin sau khi sửa, cập nhật cache |
+| DELETE | `/api/news/{id}` | TODO: xoá tin, evict cache             |
+
+Hiện tại chỉ API create đã có full flow implementation. Các API còn lại đang trả `501 Not Implemented` và có TODO trong `NewsService` để thực tập sinh hoàn thiện.
 
 Mọi API đều trả về cấu trúc chung `BaseResponse`, DTO nằm trong field `data`:
 
