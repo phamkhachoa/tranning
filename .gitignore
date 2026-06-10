@@ -29,7 +29,6 @@ application-local.properties
 Thumbs.db
 
 ### Archives / generated packages ###
-*.zip
 *.tar
 *.tar.gz
 *.tgz
