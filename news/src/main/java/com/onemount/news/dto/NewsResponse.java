@@ -1,32 +1,26 @@
 package com.onemount.news.dto;
 
-import com.onemount.news.model.News;
 import com.onemount.news.model.enumeration.NewsStatus;
-import java.time.ZonedDateTime;
+import java.time.Instant;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
-public record NewsResponse(
-        Long id,
-        String title,
-        String slug,
-        String summary,
-        String content,
-        String author,
-        String thumbnailUrl,
-        NewsStatus status,
-        ZonedDateTime createdOn,
-        ZonedDateTime lastModifiedOn) {
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+public class NewsResponse {
 
-    public static NewsResponse fromModel(News news) {
-        return new NewsResponse(
-                news.getId(),
-                news.getTitle(),
-                news.getSlug(),
-                news.getSummary(),
-                news.getContent(),
-                news.getAuthor(),
-                news.getThumbnailUrl(),
-                news.getStatus(),
-                news.getCreatedOn(),
-                news.getLastModifiedOn());
-    }
+    private Long id;
+    private String title;
+    private String slug;
+    private String summary;
+    private String content;
+    private String author;
+    private String thumbnailUrl;
+    private NewsStatus status;
+    private Instant createdOn;
+    private Instant lastModifiedOn;
 }

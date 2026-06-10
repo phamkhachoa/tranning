@@ -5,8 +5,9 @@ Service quản lý tin tức bằng Java 21 + Spring Boot 3, cấu trúc tham kh
 ## Tech stack
 
 - Java 21, Spring Boot 3.3 (Web, Data JPA, Validation, Cache, Actuator)
-- MySQL 8 (JPA, `ddl-auto=update` — yas dùng Liquibase, có thể nâng cấp sau)
+- MySQL 8 (JPA + Liquibase migration)
 - Redis 7 (cache chi tiết tin tức, TTL 10 phút)
+- Lombok + MapStruct
 - Springdoc OpenAPI (Swagger UI)
 - Docker / Docker Compose
 
@@ -18,6 +19,7 @@ src/main/java/com/onemount/news/
 ├── config/          # RedisConfig (cache manager), JpaAuditingConfig
 ├── controller/      # NewsController (REST API)
 ├── exception/       # NotFoundException, BadRequestException, ApiExceptionHandler
+├── mapper/          # NewsMapper (MapStruct)
 ├── model/           # News entity, AbstractAuditEntity, enumeration/
 ├── repository/      # NewsRepository (Spring Data JPA)
 ├── service/         # NewsService (business logic + cache)
@@ -39,6 +41,8 @@ mvn spring-boot:run
 ```
 
 Yêu cầu JDK 21. Cấu hình mặc định trỏ tới `localhost:3306` (user `news` / pass `news123`, database `news`) và `localhost:6379`, có thể override bằng biến môi trường (`MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`).
+
+Liquibase sẽ chạy changelog tại `src/main/resources/db/changelog/changelog.yaml` khi project start để khởi tạo bảng `news` ban đầu. Hibernate DDL đã được tắt bằng `spring.jpa.hibernate.ddl-auto=none`.
 
 ## API
 

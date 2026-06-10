@@ -1,6 +1,6 @@
 package com.onemount.news.config;
 
-import java.time.ZonedDateTime;
+import java.time.Instant;
 import java.util.Optional;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,6 +19,6 @@ public class JpaAuditingConfig {
 
     @Bean
     public DateTimeProvider auditingDateTimeProvider() {
-        return () -> Optional.of(ZonedDateTime.now());
+        return () -> Optional.of(Instant.now());
     }
 }
