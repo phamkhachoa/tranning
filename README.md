@@ -9,7 +9,7 @@ ve Spring Security, JWT, request routing va cach tach identity ra mot service ri
 Thu tu hoc de nghi:
 
 1. Doc `identity-service/README.md` de hieu endpoint, data model va service/repository TODO.
-2. Chay infra chung bang `docker compose up -d identity-postgres`.
+2. Chay infra chung bang `docker compose up -d news-postgres news-redis identity-postgres`.
 3. Chay `identity-service` truc tiep tren port `8081`, test `POST /users`.
 4. Doc service methods chua implement nhu `AuthService.login`, `AuthService.refresh`, `JwtTokenService.createAccessToken`.
 5. Mo rong Liquibase migration cho roles, permissions, refresh token va audit log.
@@ -29,7 +29,7 @@ Request mau:
 
 ```bash
 # Terminal 1
-docker compose up -d identity-postgres
+docker compose up -d news-postgres news-redis identity-postgres
 
 # Terminal 2
 cd identity-service
@@ -50,14 +50,14 @@ curl -X POST http://localhost:8081/users \
 Root `docker-compose.yml` dung de chay cac dependency local cho cac bai training:
 
 ```bash
-docker compose up -d news-mysql news-redis identity-postgres
+docker compose up -d news-postgres news-redis identity-postgres
 ```
 
 Service infra:
 
 | Service | Port host | Dung cho |
 | --- | --- | --- |
-| `news-mysql` | `3306` | `news` service |
+| `news-postgres` | `5432` | database rieng cho `news` service |
 | `news-redis` | `6379` | cache cho `news` service |
 | `identity-postgres` | `5433` | database rieng cho `identity-service` |
 
@@ -85,7 +85,7 @@ Client -> API Gateway / Load Balancer -> News instance 1
                                     \-> News instance 2
                                     \-> News instance N
 
-News instances -> MySQL / Redis / external dependencies
+News instances -> PostgreSQL / Redis / external dependencies
 ```
 
 Nhung thanh phan quan trong:
@@ -107,11 +107,11 @@ Yeu cau:
 - Maven
 - Docker va Docker Compose
 
-Khoi dong MySQL va Redis truoc:
+Khoi dong PostgreSQL va Redis truoc:
 
 ```bash
 cd news
-docker compose up -d mysql redis
+docker compose up -d postgres redis
 ```
 
 Terminal 1: chay instance `news` thu nhat tren port `8081`:
@@ -140,7 +140,7 @@ Swagger UI cua tung instance:
 - http://localhost:8081/swagger-ui.html
 - http://localhost:8082/swagger-ui.html
 
-Vi 2 instance dung chung MySQL va Redis, du lieu tao o instance `8081` co the doc lai tu instance `8082`, va nguoc lai. Neu gap loi Liquibase khi start dong thoi, hay start instance thu nhat xong roi moi start instance thu hai.
+Vi 2 instance dung chung PostgreSQL va Redis, du lieu tao o instance `8081` co the doc lai tu instance `8082`, va nguoc lai. Neu gap loi Liquibase khi start dong thoi, hay start instance thu nhat xong roi moi start instance thu hai.
 
 Co the build jar va chay bang `java -jar`:
 
@@ -211,7 +211,7 @@ Khi hoan thanh, thu tu chay local:
 ```bash
 # Terminal 1
 cd news
-docker compose up -d mysql redis
+docker compose up -d postgres redis
 SERVER_PORT=8081 mvn spring-boot:run
 
 # Terminal 2

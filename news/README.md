@@ -5,7 +5,7 @@ Service quản lý tin tức bằng Java 21 + Spring Boot 3, cấu trúc tham kh
 ## Tech stack
 
 - Java 21, Spring Boot 3.3 (Web, Data JPA, Validation, Cache, Actuator)
-- MySQL 8 (JPA + Liquibase migration)
+- PostgreSQL 16 (JPA + Liquibase migration)
 - Redis 7 (cache chi tiết tin tức, TTL 10 phút)
 - Lombok + MapStruct
 - Springdoc OpenAPI (Swagger UI)
@@ -27,22 +27,22 @@ src/main/java/com/onemount/news/
 └── dto/             # BaseResponse (wrapper chung), NewsRequest, NewsResponse, NewsSummaryResponse, NewsListResponse
 ```
 
-## Chạy bằng Docker Compose (cả app + MySQL + Redis)
+## Chạy bằng Docker Compose (cả app + PostgreSQL + Redis)
 
 ```bash
 docker compose up -d --build
 ```
 
-## Chạy local (chỉ MySQL + Redis trong Docker)
+## Chạy local (chỉ PostgreSQL + Redis trong Docker)
 
 ```bash
-docker compose up -d mysql redis
+docker compose up -d postgres redis
 mvn spring-boot:run
 ```
 
-Yêu cầu JDK 21. Cấu hình mặc định trỏ tới `localhost:3306` (user `news` / pass `news123`, database `news`) và `localhost:6379`, có thể override bằng biến môi trường (`MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`).
+Yêu cầu JDK 21. Cấu hình mặc định trỏ tới `localhost:5432` (user `news` / pass `news123`, database `news`) và `localhost:6379`, có thể override bằng biến môi trường (`NEWS_DB_HOST`, `NEWS_DB_PORT`, `NEWS_DB_NAME`, `NEWS_DB_USERNAME`, `NEWS_DB_PASSWORD`, `REDIS_HOST`, `REDIS_PORT`).
 
-Liquibase sẽ chạy changelog tại `src/main/resources/db/changelog/changelog.yaml` khi project start để khởi tạo bảng `news` ban đầu. Hibernate DDL đã được tắt bằng `spring.jpa.hibernate.ddl-auto=none`.
+Liquibase sẽ chạy changelog tại `src/main/resources/db/changelog/db.changelog.xml` khi project start để khởi tạo bảng `news` ban đầu. Hibernate DDL đã được tắt bằng `spring.jpa.hibernate.ddl-auto=none`.
 
 ## API
 

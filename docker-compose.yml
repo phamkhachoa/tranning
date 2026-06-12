@@ -1,18 +1,17 @@
 services:
-  news-mysql:
-    image: mysql:8.4
-    container_name: training-news-mysql
+  news-postgres:
+    image: postgres:16-alpine
+    container_name: training-news-postgres
     environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: news
-      MYSQL_USER: news
-      MYSQL_PASSWORD: news123
+      POSTGRES_DB: news
+      POSTGRES_USER: news
+      POSTGRES_PASSWORD: news123
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - news-mysql-data:/var/lib/mysql
+      - news-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      test: ["CMD-SHELL", "pg_isready -U news -d news"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -46,5 +45,5 @@ services:
       retries: 10
 
 volumes:
-  news-mysql-data:
+  news-postgres-data:
   identity-postgres-data:

@@ -1,18 +1,17 @@
 services:
-  mysql:
-    image: mysql:8.4
-    container_name: news-mysql
+  postgres:
+    image: postgres:16-alpine
+    container_name: news-postgres
     environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: news
-      MYSQL_USER: news
-      MYSQL_PASSWORD: news123
+      POSTGRES_DB: news
+      POSTGRES_USER: news
+      POSTGRES_PASSWORD: news123
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql-data:/var/lib/mysql
+      - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      test: ["CMD-SHELL", "pg_isready -U news -d news"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -32,20 +31,20 @@ services:
 #    build: .
 #    container_name: news-service
 #    environment:
-#      MYSQL_HOST: mysql
-#      MYSQL_PORT: 3306
-#      MYSQL_DATABASE: news
-#      MYSQL_USER: news
-#      MYSQL_PASSWORD: news123
+#      NEWS_DB_HOST: postgres
+#      NEWS_DB_PORT: 5432
+#      NEWS_DB_NAME: news
+#      NEWS_DB_USERNAME: news
+#      NEWS_DB_PASSWORD: news123
 #      REDIS_HOST: redis
 #      REDIS_PORT: 6379
 #    ports:
 #      - "8080:8080"
 #    depends_on:
-#      mysql:
+#      postgres:
 #        condition: service_healthy
 #      redis:
 #        condition: service_healthy
 
 volumes:
-  mysql-data:
+  postgres-data:

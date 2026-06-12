@@ -37,7 +37,7 @@ public class News extends AbstractAuditEntity {
     @Column(length = 1000)
     private String summary;
 
-    @Column(columnDefinition = "LONGTEXT")
+    @Column(columnDefinition = "TEXT")
     private String content;
 
     private String author;

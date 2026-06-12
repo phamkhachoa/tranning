@@ -2,11 +2,11 @@
 -- changeset training:news-001-init
 
 CREATE TABLE news (
-    id                 BIGINT       NOT NULL AUTO_INCREMENT,
+    id                 BIGSERIAL    PRIMARY KEY,
     title              VARCHAR(255) NOT NULL,
     slug               VARCHAR(255),
     summary            VARCHAR(1000),
-    content            LONGTEXT,
+    content            TEXT,
     author             VARCHAR(255),
     thumbnail_url      VARCHAR(255),
     status             VARCHAR(20)  NOT NULL,
@@ -14,6 +14,5 @@ CREATE TABLE news (
     created_by         VARCHAR(255),
     last_modified_on   TIMESTAMP(6),
     last_modified_by   VARCHAR(255),
-    CONSTRAINT pk_news PRIMARY KEY (id),
     CONSTRAINT uk_news_slug UNIQUE (slug)
 );
