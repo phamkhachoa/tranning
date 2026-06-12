@@ -1,0 +1,50 @@
+services:
+  news-mysql:
+    image: mysql:8.4
+    container_name: training-news-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: news
+      MYSQL_USER: news
+      MYSQL_PASSWORD: news123
+    ports:
+      - "3306:3306"
+    volumes:
+      - news-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  news-redis:
+    image: redis:7-alpine
+    container_name: training-news-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  identity-postgres:
+    image: postgres:16-alpine
+    container_name: training-identity-postgres
+    environment:
+      POSTGRES_DB: identity_training
+      POSTGRES_USER: identity
+      POSTGRES_PASSWORD: identity123
+    ports:
+      - "5433:5432"
+    volumes:
+      - identity-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U identity -d identity_training"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  news-mysql-data:
+  identity-postgres-data:

@@ -1,0 +1,28 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: identity-service
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  datasource:
+    url: ${IDENTITY_DB_URL:jdbc:postgresql://localhost:5433/identity_training}
+    username: ${IDENTITY_DB_USERNAME:identity}
+    password: ${IDENTITY_DB_PASSWORD:identity123}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog.xml
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

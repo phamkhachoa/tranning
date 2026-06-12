@@ -1,4 +1,76 @@
-# Training: News Service HA va API Gateway
+# Training: News Service HA, API Gateway va Identity Service
+
+Repo nay dung de huong dan thuc tap sinh xay he thong tu dau theo tung buoc. Folder `news`
+la bai HA/API Gateway ban dau. Hai folder moi `identity-service` va `api-gateway` la bai hoc
+ve Spring Security, JWT, request routing va cach tach identity ra mot service rieng.
+
+## Identity training nhanh
+
+Thu tu hoc de nghi:
+
+1. Doc `identity-service/README.md` de hieu endpoint, data model va service/repository TODO.
+2. Chay infra chung bang `docker compose up -d identity-postgres`.
+3. Chay `identity-service` truc tiep tren port `8081`, test `POST /users`.
+4. Doc service methods chua implement nhu `AuthService.login`, `AuthService.refresh`, `JwtTokenService.createAccessToken`.
+5. Mo rong Liquibase migration cho roles, permissions, refresh token va audit log.
+6. Them RBAC day du: role, permission, assignment theo scope.
+
+Flow tong quat:
+
+```text
+Client -> API Gateway -> Identity Service
+                 |              |
+                 |              -> AuthService / UserService / AuthzService
+                 |              -> Repository
+                 -> verify JWT va forward X-User-* headers
+```
+
+Request mau:
+
+```bash
+# Terminal 1
+docker compose up -d identity-postgres
+
+# Terminal 2
+cd identity-service
+mvn spring-boot:run
+
+# Terminal 3
+cd api-gateway
+mvn spring-boot:run
+
+# Terminal 4
+curl -X POST http://localhost:8081/users \
+  -H "Content-Type: application/json" \
+  -d '{"email":"student1@courseflow.local","password":"Student@123","displayName":"Student One"}'
+```
+
+## Infra chung
+
+Root `docker-compose.yml` dung de chay cac dependency local cho cac bai training:
+
+```bash
+docker compose up -d news-mysql news-redis identity-postgres
+```
+
+Service infra:
+
+| Service | Port host | Dung cho |
+| --- | --- | --- |
+| `news-mysql` | `3306` | `news` service |
+| `news-redis` | `6379` | cache cho `news` service |
+| `identity-postgres` | `5433` | database rieng cho `identity-service` |
+
+## Liquibase convention
+
+Ca `news` va `identity-service` dung cung convention voi CourseFlow:
+
+```text
+src/main/resources/db/changelog/db.changelog.xml
+src/main/resources/db/changelog/changes/001-init.sql
+```
+
+Them migration moi bang cach tao `changes/NNN-ten-thay-doi.sql` va include file do trong `db.changelog.xml`.
 
 Repo nay dang co service `news` viet bang Java 21 + Spring Boot 3. Muc tieu tiep theo la mo phong High Availability (HA) tren local bang cach chay 2 instance `news`, sau do them mot service `api-gateway` dung Spring Cloud Gateway de route request xuong cac instance `news`.
 

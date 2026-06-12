@@ -1,122 +1,71 @@
-# API Gateway Service
+# API Gateway Training
 
-Service gateway dùng Spring Cloud Gateway để route request từ client xuống các instance `news` khi mô phỏng High Availability trên local.
+Gateway la cua vao cua he thong. Trong bai identity nay, gateway lam 2 viec:
 
-## Tech stack
+1. Route request tu public API path ve identity-service.
+2. Verify JWT va tao cac header identity da duoc tin cay.
 
-- Java 21, Spring Boot 3.3.5
-- Spring Cloud Gateway
-- Spring Cloud LoadBalancer
-- Spring Boot Actuator
+## 1. Chay gateway
 
-## Flow
-
-```text
-Client -> API Gateway :8080 -> news-service :8081
-                           \-> news-service :8082
-```
-
-Gateway nhận request tại `http://localhost:8080`, dùng route `lb://news-service`, sau đó Spring Cloud LoadBalancer chọn một instance `news-service` còn healthy.
-
-## Cấu hình chính
-
-File cấu hình nằm tại `src/main/resources/application.yml`.
-
-Gateway mặc định:
-
-- Chạy port `8080`.
-- Route `/api/news` và `/api/news/**` xuống `news-service`.
-- Khai báo 2 instance local:
-  - `http://localhost:8081`
-  - `http://localhost:8082`
-- Health check backend qua `/actuator/health` mỗi 5 giây.
-- Timeout kết nối backend 2 giây, response timeout 10 giây.
-- Retry 1 lần cho request `GET` khi gặp lỗi 5xx hoặc lỗi gateway. Không retry `POST/PUT/DELETE` để tránh tạo/sửa/xóa lặp.
-
-Có thể override bằng biến môi trường:
+Chay identity truoc:
 
 ```bash
-SERVER_PORT=8080
-NEWS_SERVICE_1_URI=http://localhost:8081
-NEWS_SERVICE_2_URI=http://localhost:8082
+cd identity-service
+mvn spring-boot:run
 ```
 
-## Chạy local
-
-Terminal 1: chạy MySQL, Redis và instance `news` đầu tiên.
-
-```bash
-cd news
-docker compose up -d mysql redis
-SERVER_PORT=8081 mvn spring-boot:run
-```
-
-Terminal 2: chạy instance `news` thứ hai.
-
-```bash
-cd news
-SERVER_PORT=8082 mvn spring-boot:run
-```
-
-Terminal 3: chạy gateway.
+Chay gateway:
 
 ```bash
 cd api-gateway
 mvn spring-boot:run
 ```
 
-## Kiểm tra
+Gateway chay port `8080`, identity-service chay port `8081`.
 
-Health của gateway:
+## 2. Route hien co
 
-```bash
-curl http://localhost:8080/actuator/health
+| Gateway path | Service path | Ghi chu |
+| --- | --- | --- |
+| `POST /api/v1/auth/register` | `/auth/register` | Public |
+| `POST /api/v1/auth/login` | `/auth/login` | Public |
+| `POST /api/v1/auth/refresh` | `/auth/refresh` | Public |
+| `GET /api/v1/users/me` | `/users/me` | Can Bearer token |
+| `GET /api/admin/v1/users` | `/backoffice/users` | Can Bearer token role ADMIN |
+| `POST /api/internal/v1/authz/check` | `/internal/authz/check` | Can Bearer token role ADMIN/SYSTEM |
+
+## 3. Request flow
+
+```text
+Client
+  -> API Gateway
+  -> JwtAuthenticationGatewayFilter
+  -> route rewrite
+  -> identity-service
 ```
 
-Danh sách route gateway:
+Gateway public endpoint:
 
 ```bash
-curl http://localhost:8080/actuator/gateway/routes
-```
-
-Gọi API `news` thông qua gateway:
-
-```bash
-curl "http://localhost:8080/api/news?pageNo=0&pageSize=10"
-```
-
-Tạo tin thông qua gateway:
-
-```bash
-curl -X POST "http://localhost:8080/api/news" \
+curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Tin qua gateway",
-    "summary": "Tao tu API Gateway",
-    "content": "Noi dung chi tiet",
-    "author": "intern",
-    "status": "PUBLISHED"
+    "email": "admin@courseflow.local",
+    "password": "Admin@123"
   }'
 ```
 
-Test failover local:
-
-1. Start đủ `news:8081`, `news:8082`, `api-gateway:8080`.
-2. Gọi `curl http://localhost:8080/api/news` vài lần.
-3. Stop một instance `news`.
-4. Đợi khoảng 5-10 giây để health check cập nhật.
-5. Gọi lại `curl http://localhost:8080/api/news`.
-
-Nếu còn ít nhất một instance `news` healthy, gateway vẫn route request GET sang instance còn lại.
-
-## Build
+Gateway protected endpoint:
 
 ```bash
-mvn -DskipTests package
+TOKEN="<accessToken from login>"
+curl http://localhost:8080/api/v1/users/me \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-Chạy file jar:
+## 4. Diem can hieu
 
-```bash
-java -jar target/api-gateway-0.0.1-SNAPSHOT.jar
-```
+- Client khong duoc tu gui `X-User-Id`, `X-User-Email`, `X-User-Roles`.
+- Gateway xoa cac header do truoc, verify JWT, sau do moi set lai.
+- Downstream service co the doc header tu gateway, nhung production phai chan direct traffic vao service.
+- Secret ky JWT phai giong nhau o gateway va identity-service.
