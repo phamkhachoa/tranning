@@ -1,0 +1,64 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      routes:
+        - id: news-service
+          uri: lb://news-service
+          predicates:
+            - Path=/api/news/**, /api/news
+          filters:
+            - name: Retry
+              args:
+                retries: 1
+                statuses: INTERNAL_SERVER_ERROR, BAD_GATEWAY, SERVICE_UNAVAILABLE
+                methods: GET
+                backoff:
+                  firstBackoff: 50ms
+                  maxBackoff: 500ms
+                  factor: 2
+                  basedOnPreviousValue: false
+
+    # FIX 1: Activates property-driven active health checks globally
+    loadbalancer:
+      configurations: health-check
+      health-check:
+        path:
+          news-service: /actuator/health
+        interval: 5s
+        refreshrate: 5s
+
+    # FIX 2: Correct structural nesting map for SimpleDiscoveryClient instances
+    discovery:
+      client:
+        simple:
+          instances:
+            news-service:
+              - uri: ${NEWS_SERVICE_1_URI:http://localhost:8081}
+              - uri: ${NEWS_SERVICE_2_URI:http://localhost:8082}
+
+resilience4j:
+  timelimiter:
+    instances:
+      news-service-route:
+        timeout-duration: 10s
+  circuitbreaker:
+    instances:
+      news-service-route:
+        connect-timeout: 2000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, gateway
+  endpoint:
+    gateway:
+      enabled: true
+    health:
+      show-details: always
