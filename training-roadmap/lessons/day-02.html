@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 02 - RBAC và protected admin API</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a class="active" href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 02: RBAC và protected admin API</h2>
+          <p>Thêm quyền tối thiểu để phân biệt admin, instructor và student trên API thật.</p>
+          <div class="meta">
+            <span class="badge">RBAC</span>
+            <span class="badge">Gateway Guard</span>
+            <span class="badge">Audit</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Student["Student token<br/>web/app"] --> GW["Gateway<br/>/api/admin/v1/**"]
+  Admin["Admin token<br/>admin web"] --> GW
+  Instructor["Instructor token<br/>web/app"] --> GW
+  GW --> Coarse{"Operator role?"}
+  Coarse -->|No| Deny403["403 Forbidden"]
+  Coarse -->|Yes| Service["Admin API service"]
+  Service --> AC["access-control<br/>permission decision"]
+  AC --> Audit[("authz audit")]
+  AC -->|allow| OK["200"]
+  AC -->|deny| Deny["403"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Admin API bị chặn nếu user không có operator role.</li>
+            <li><code>access-control-service</code> có role assignment và permission decision tối thiểu.</li>
+            <li>Có log/audit cho quyết định allow/deny.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Đọc lại luồng gateway trước: request vào gateway, gateway verify Keycloak token, sau đó downstream service chỉ tin trusted headers và internal JWT.</li>
+            <li>Nhắc lại bài ngày 01: verify chữ ký bằng JWKS chỉ trả lời “token này do đúng issuer ký và đúng audience”; quyền nghiệp vụ vẫn phải lấy từ access-control/domain guard, không chỉ tin role claim trong token.</li>
+            <li>Đọc <code>access-control-service</code>: role, permission, assignment, audit/decision DTO; xác định role nào là platform role, role nào có scope course/department.</li>
+            <li>Chốt permission tối thiểu cho khóa học: <code>COURSE_CREATE</code>, <code>COURSE_REVIEW</code>, <code>COURSE_PUBLISH</code>, <code>USER_ADMIN</code>, <code>GRADE_SUBMISSION</code>, <code>SEARCH_REINDEX</code>.</li>
+            <li>Kiểm tra seed/demo role assignment cho admin, instructor, student; nếu thiếu thì thêm Liquibase demo context, không sửa tay database.</li>
+            <li>Implement hoặc hoàn thiện API assign role cho admin: validate subject tồn tại hoặc format hợp lệ, role code hợp lệ, scopeType/scopeId hợp lệ, duplicate assignment idempotent hoặc trả conflict rõ.</li>
+            <li>Implement hoặc hoàn thiện API check permission: nhận userId, permission, scopeType, scopeId; trả allow/deny + reason đủ debug; không throw 500 cho deny hợp lệ.</li>
+            <li>Trong domain service, không chỉ check role string ở controller; gọi guard phù hợp, ví dụ course staff access, self-or-staff, admin-only, platform admin.</li>
+            <li>Chặn forged headers: gọi trực tiếp service bằng <code>X-User-Id</code> nhưng không có internal JWT phải bị reject bởi common-library trusted gateway filter.</li>
+            <li>Gateway route admin phải protected: student gọi <code>/api/admin/v1/users</code> hoặc <code>/api/admin/v1/courses</code> phải 403/401, không được lọt vào business logic thành công.</li>
+            <li>Audit decision: với deny quan trọng, ghi userId, permission, scope, allowed=false, reason, createdAt để truy vết.</li>
+            <li>Không hardcode permission ở quá nhiều nơi; gom helper guard gần service/domain boundary để các ngày sau tái dùng.</li>
+            <li>Evidence bắt buộc: admin assign role thành công, student bị deny admin API, instructor được phép course authoring, direct service forged header bị reject.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Student gọi <code>/api/admin/v1/users</code> nhận <code>403</code>.</li>
+            <li>Admin gọi <code>/api/admin/v1/users</code> nhận <code>200</code>.</li>
+            <li>Instructor chỉ được thao tác các API/course được phân quyền.</li>
+            <li>Audit có record/log cho ít nhất một allow và một deny.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>GET /api/admin/v1/users
+Authorization: Bearer &lt;student_token&gt;
+Expected: 403
+
+GET /api/admin/v1/users
+Authorization: Bearer &lt;admin_token&gt;
+Expected: 200
+
+Check:
+- gateway log có request id
+- access-control audit có allowed/denied reason</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+          <a href="day-03.html">Ngày 03 - User Admin</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

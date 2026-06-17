@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CourseFlow Mini - API Contract</title>
+  <link rel="stylesheet" href="assets/roadmap.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="index.html">Tổng quan</a>
+      <a href="system-overview.html">System Overview</a>
+      <a class="active" href="api-contract.html">API Contract</a>
+      <a href="auth-flow.html">Auth Flow</a>
+      <a href="db-design-guide.html">DB Design</a>
+      <a href="service-todo.html">Service TODO</a>
+      <a href="lessons/day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="lessons/day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="lessons/day-03.html">Ngày 03 - User Admin</a>
+      <a href="lessons/day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="lessons/day-05.html">Ngày 05 - Publish</a>
+      <a href="lessons/day-06.html">Ngày 06 - Enrollment</a>
+      <a href="lessons/day-07.html">Ngày 07 - Progress</a>
+      <a href="lessons/day-08.html">Ngày 08 - Assignment</a>
+      <a href="lessons/day-09.html">Ngày 09 - Quiz</a>
+      <a href="lessons/day-10.html">Ngày 10 - Gradebook</a>
+      <a href="lessons/day-11.html">Ngày 11 - Notification</a>
+      <a href="lessons/day-12.html">Ngày 12 - Chat</a>
+      <a href="lessons/day-13.html">Ngày 13 - Search</a>
+      <a href="lessons/day-14.html">Ngày 14 - Integration QA</a>
+      <a href="lessons/day-15.html">Ngày 15 - Demo Review</a>
+      <a href="lessons/day-16.html">Ngày 16 - Observability</a>
+      <a href="lessons/day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="lessons/day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>API contract cho 18 ngày</h2>
+          <p>
+            Đây là contract định hướng, không phải OpenAPI hoàn chỉnh. Có thể chỉnh tên field,
+            nhưng không nên để mỗi nhóm tự đổi path vì web/app cần một surface ổn định để demo.
+          </p>
+        </section>
+
+        <section class="panel">
+          <h2>Auth khi gọi API</h2>
+          <p>
+            Đường chính của mini stack là đăng nhập web/app qua Keycloak, sau đó gọi cùng API với
+            <code>Authorization: Bearer &lt;access_token&gt;</code>. Gateway verify OIDC token, tự sinh
+            internal JWT local cho downstream service, rồi authorization vẫn chạy đầy đủ ở
+            gateway/access-control/domain service. Luồng đầy đủ nằm ở
+            <a href="auth-flow.html">Auth Flow</a>.
+          </p>
+          <p>
+            Khi viết curl evidence, có thể copy access token từ browser/app dev session sau khi login Keycloak.
+            Nếu bật <code>COURSEFLOW_TRAINING_AUTH_BYPASS=true</code>, dùng header sau để giả lập user:
+          </p>
+          <pre><code>X-Training-User-Id: 4
+X-Training-User-Email: student@courseflow.local
+X-Training-User-Roles: STUDENT</code></pre>
+          <p>Với admin/instructor:</p>
+          <pre><code>X-Training-User-Id: 2
+X-Training-User-Email: instructor@courseflow.local
+X-Training-User-Roles: INSTRUCTOR</code></pre>
+        </section>
+
+        <section class="panel">
+          <h2>Core APIs</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th>API</th>
+                <th>Service</th>
+                <th>Phần cần làm</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>User/Profile</td>
+                <td><code>GET /api/v1/users/me</code><br><code>PUT /api/v1/users/me/profile</code><br><code>GET /api/admin/v1/users</code><br><code>POST /api/admin/v1/users</code><br><code>GET /api/admin/v1/users/{id}</code><br><code>POST /api/admin/v1/users/{id}/deactivate</code></td>
+                <td>user-management-service</td>
+                <td>Profile DTO, validation, Keycloak Admin API provision, default STUDENT role, status ACTIVE/DISABLED, admin search.</td>
+              </tr>
+              <tr>
+                <td>RBAC</td>
+                <td><code>POST /api/internal/v1/authz/check</code><br><code>POST /api/admin/v1/users/{id}/assignments</code></td>
+                <td>access-control-service</td>
+                <td>Role assignment, permission decision, audit reason.</td>
+              </tr>
+              <tr>
+                <td>Course CRUD</td>
+                <td><code>POST /api/admin/v1/courses</code><br><code>PATCH /api/admin/v1/courses/{id}</code><br><code>GET /api/v1/courses</code><br><code>GET /api/v1/courses/{id}</code></td>
+                <td>course-service</td>
+                <td>Draft CRUD, public catalog, paging/filter, duplicate slug.</td>
+              </tr>
+              <tr>
+                <td>Publish workflow</td>
+                <td><code>POST /api/admin/v1/courses/{id}/submit-review</code><br><code>POST /api/admin/v1/courses/{id}/publish</code><br><code>POST /api/admin/v1/courses/{id}/archive</code></td>
+                <td>course-service</td>
+                <td>Status transition, readiness rule, audit/history.</td>
+              </tr>
+              <tr>
+                <td>Enrollment</td>
+                <td><code>POST /api/v1/enrollments</code><br><code>GET /api/v1/enrollments</code><br><code>GET /api/admin/v1/enrollments?courseId=...</code></td>
+                <td>enrollment-service</td>
+                <td>Published-only, no duplicate ACTIVE enrollment, capacity optional.</td>
+              </tr>
+              <tr>
+                <td>Progress</td>
+                <td><code>POST /api/v1/courses/{courseId}/modules/{moduleId}/items/{itemId}/progress</code><br><code>GET /api/v1/enrollments/{id}/progress</code></td>
+                <td>course-service + enrollment-service</td>
+                <td>Mark complete, progress percent, next action.</td>
+              </tr>
+              <tr>
+                <td>Assignment</td>
+                <td><code>POST /api/v1/assignments/{id}/submissions</code><br><code>GET /api/admin/v1/assignments/{id}/submissions</code><br><code>POST /api/admin/v1/submissions/{id}/grade</code></td>
+                <td>assignment-service</td>
+                <td>Submission lifecycle, deadline/late flag optional, feedback.</td>
+              </tr>
+              <tr>
+                <td>Media/MinIO</td>
+                <td><code>POST /api/admin/v1/media/videos/upload-url</code><br><code>POST /api/admin/v1/media/videos</code><br><code>GET /api/v1/media/videos/{id}/playback-url</code><br><code>GET /api/v1/media/assets/{id}/download-url</code></td>
+                <td>media-service</td>
+                <td>Service có sẵn từ project chính. Người học dùng signed URL và quan sát MinIO, không reimplement trong 18 ngày.</td>
+              </tr>
+              <tr>
+                <td>Chat</td>
+                <td><code>GET /api/v1/chat/courses/{courseId}/room</code><br><code>GET /api/v1/chat/courses/{courseId}/messages</code><br><code>POST /api/v1/chat/courses/{courseId}/messages</code><br><code>WS /ws/chat</code></td>
+                <td>chat-service</td>
+                <td>MongoDB message history, STOMP connect, course access check.</td>
+              </tr>
+              <tr>
+                <td>Quiz</td>
+                <td><code>POST /api/v1/quizzes/{id}/attempts</code><br><code>POST /api/v1/quizzes/{id}/attempts/{attemptId}/submit</code></td>
+                <td>quiz-service</td>
+                <td>Attempt lifecycle, scoring, do not leak correct answer before submit.</td>
+              </tr>
+              <tr>
+                <td>Gradebook</td>
+                <td><code>GET /api/v1/gradebook/me</code><br><code>GET /api/admin/v1/gradebook/courses/{courseId}</code></td>
+                <td>gradebook-service</td>
+                <td>Aggregate assignment/quiz score, pass/fail, learner privacy.</td>
+              </tr>
+              <tr>
+                <td>Notification</td>
+                <td><code>GET /api/v1/notifications</code><br><code>POST /api/v1/notifications/{id}/read</code></td>
+                <td>notification-service</td>
+                <td>Create notification from enrollment/grade events, mark read.</td>
+              </tr>
+              <tr>
+                <td>Search</td>
+                <td><code>GET /api/v1/search/courses?q=</code><br><code>GET /api/v1/search/courses/suggest?q=</code><br><code>GET /api/v1/search/courses/recommendations?q=&level=</code><br><code>POST /api/admin/v1/search/courses</code><br><code>GET http://localhost:18083/connectors/courseflow-course-search-cdc/status</code></td>
+                <td>Debezium, Kafka Connect, search-service</td>
+                <td>Debezium CDC từ <code>cf_course.public.courses</code> vào Kafka topic, search-service project sang Elasticsearch; manual index chỉ dùng backfill/debug.</td>
+              </tr>
+              <tr>
+                <td>Observability</td>
+                <td><code>GET /actuator/health</code><br><code>GET /actuator/prometheus</code><br><code>GET http://localhost:19090/targets</code><br><code>GET http://localhost:13000</code></td>
+                <td>Prometheus, Grafana, gateway, services</td>
+                <td>Scrape metric, correlation id, dashboard, alert rule. Không expose token/user email làm metric label.</td>
+              </tr>
+              <tr>
+                <td>Cache/Rate limit</td>
+                <td><code>GET /api/v1/courses</code><br><code>GET /api/v1/search/courses</code><br><code>GET /api/v1/search/courses/suggest</code></td>
+                <td>Redis, api-gateway, course/search services</td>
+                <td>Cache read-heavy endpoint bằng TTL ngắn, rate limit public/search-heavy endpoint, timeout/retry có giới hạn.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>Error contract</h2>
+          <p>Mọi service nên trả cùng shape để web/app xử lý lỗi nhất quán:</p>
+          <pre><code>{
+  "statusCode": "409 CONFLICT",
+  "title": "Conflict",
+  "detail": "Course slug already exists",
+  "errorCode": "COURSE_SLUG_DUPLICATED",
+  "fieldErrors": []
+}</code></pre>
+          <ul>
+            <li><code>400</code>: validation hoặc body sai kiểu.</li>
+            <li><code>401</code>: thiếu/invalid token.</li>
+            <li><code>403</code>: có login nhưng không đủ quyền.</li>
+            <li><code>404</code>: resource không tồn tại hoặc không được phép biết nó tồn tại.</li>
+            <li><code>409</code>: duplicate, invalid state transition, idempotency payload conflict.</li>
+            <li><code>429</code>: rate limit.</li>
+            <li><code>502/503</code>: downstream dependency lỗi hoặc timeout.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Quy ước path cần giữ thống nhất</h2>
+          <ul>
+            <li><code>/api/v1/**</code>: learner/public API cho web learn và mobile app.</li>
+            <li><code>/api/admin/v1/**</code>: backoffice API cho admin web, instructor/admin operations.</li>
+            <li><code>/internal/**</code> và <code>/backoffice/**</code>: path trong service sau khi gateway rewrite, không gọi trực tiếp từ client.</li>
+            <li><code>POST /api/admin/v1/users</code> là chuẩn để admin tạo learner. Learner <code>/register</code> là public self-registration qua Keycloak, không thay thế admin API.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Chat STOMP training auth</h2>
+          <p>Với WebSocket/STOMP trên web hoặc app, gửi native header trong CONNECT frame:</p>
+          <pre><code>Authorization: Training 4:student@courseflow.local:STUDENT</code></pre>
+          <p>Destination mẫu:</p>
+          <pre><code>CONNECT /ws/chat
+SUBSCRIBE /topic/courses/{courseId}/chat
+SEND /app/courses/{courseId}/send</code></pre>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Single master changelog for outbox-relay.
+  Add a new migration by dropping a NNN-*.sql under db/changelog/changes/ and
+  registering it here as a new <include>. Keep includes in numeric order.
+-->
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <include file="db/changelog/changes/000-pgcrypto.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/001-init.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/003-dead-letter-replay.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/004-dead-letter-governance.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/005-dead-letter-maker-checker.sql" relativeToChangelogFile="false"/>
+</databaseChangeLog>

@@ -1,247 +1,231 @@
-# Training: News Service HA, API Gateway va Identity Service
+# CourseFlow Training
 
-Repo nay dung de huong dan thuc tap sinh xay he thong tu dau theo tung buoc. Folder `news`
-la bai HA/API Gateway ban dau. Hai folder moi `identity-service` va `api-gateway` la bai hoc
-ve Spring Security, JWT, request routing va cach tach identity ra mot service rieng.
+Repo này là bản training được bê từ CourseFlow thật để thực tập sinh học trên source gần thực tế,
+nhưng đã được thu gọn thành **CourseFlow Mini**. Mục tiêu không phải hoàn thành toàn bộ LMS
+enterprise, mà là học các pattern backend phổ biến trong hầu hết hệ thống thật.
 
-## Identity training nhanh
+## Bắt Đầu Từ Đâu?
 
-Thu tu hoc de nghi:
+- [training-roadmap/index.html](training-roadmap/index.html): tổng quan chương trình 18 ngày.
+- [training-roadmap/api-contract.html](training-roadmap/api-contract.html): API contract tối thiểu để web/app có surface ổn định.
+- [training-roadmap/auth-flow.html](training-roadmap/auth-flow.html): luồng Authentication/Authorization đầy đủ và tài khoản demo.
+- [training-roadmap/db-design-guide.html](training-roadmap/db-design-guide.html): guardrail để thực tập sinh tự thiết kế DB.
+- [training-roadmap/service-todo.html](training-roadmap/service-todo.html): method TODO/skeleton theo từng service.
+- [backend/TRAINING_SCOPE.md](backend/TRAINING_SCOPE.md): service giữ lại, service đã loại khỏi training.
 
-1. Doc `identity-service/README.md` de hieu endpoint, data model va service/repository TODO.
-2. Chay infra chung bang `docker compose up -d news-postgres news-redis identity-postgres`.
-3. Chay `identity-service` truc tiep tren port `8081`, test `POST /users`.
-4. Doc service methods chua implement nhu `AuthService.login`, `AuthService.refresh`, `JwtTokenService.createAccessToken`.
-5. Mo rong Liquibase migration cho roles, permissions, refresh token va audit log.
-6. Them RBAC day du: role, permission, assignment theo scope.
+Tìm các điểm thực hành ngay trong source:
 
-Flow tong quat:
+```bash
+rg 'TODO\(training' backend/services
+```
+
+Quy ước comment trong code:
+
+- `TRAINING(...)`: contract/flow/query đã có sẵn để đọc hiểu, không mặc định là việc cần sửa.
+- `TODO(training-day-XX-impl)`: điểm học viên cần implement hoặc harden, có `Step 1/2/3` ngay trong comment.
+
+## Cách Học Trong Repo Này
+
+Mỗi bài học có ba lớp hướng dẫn, đọc theo thứ tự này:
+
+1. Mở HTML của ngày học trong `training-roadmap/lessons`.
+2. Mở `training-roadmap/api-contract.html` để giữ đúng path cho web/app.
+3. Tìm comment trong code bằng `rg 'TODO\(training' backend/services`.
+
+Trong code:
+
+- `TRAINING(...)`: đọc để hiểu API, flow, query, boundary đã có.
+- `TODO(training-day-XX-impl)`: điểm cần implement hoặc harden trong bài đó.
+- Mỗi TODO có Step 1/2/3 ngay cạnh method để biết cần sửa theo hướng nào.
+
+Người học tự làm DB design, Liquibase migration, entity/repository query, service implementation
+và manual API evidence. Automated test chưa phải trọng tâm ở phase này. Mỗi feature cần chứng minh
+bằng happy path, error path và read-back query.
+
+## Service Giữ Lại
+
+| Service | Kỹ năng chính |
+| --- | --- |
+| `api-gateway` | Routing, Keycloak token verification, trusted gateway boundary |
+| `user-management-service` | User/profile/directory lifecycle |
+| `access-control-service` | RBAC, role assignment, permission decision |
+| `course-service` | CRUD, catalog, publish workflow |
+| `enrollment-service` | Transaction, idempotency, learner progress |
+| `assignment-service` | Submission lifecycle, instructor feedback |
+| `chat-service` | Realtime chat, WebSocket/STOMP, MongoDB message history |
+| `quiz-service` | Attempt lifecycle, automatic scoring |
+| `gradebook-service` | Score aggregation, pass/fail, privacy |
+| `notification-service` | Notification inbox, event reaction |
+| `search-service` | Elasticsearch search, autocomplete, recommendation-lite |
+| `outbox-relay` | Outbox polling, retry, at-least-once delivery |
+| `Prometheus/Grafana` | Observability, metrics, dashboard, alert rule |
+| `Redis` | Cache/rate limit practice, not source of truth |
+
+Web và app được giữ làm API contract/demo surface, không phải trọng tâm để thực tập sinh viết lại UI.
+
+## Local Infra Training
+
+```bash
+cd backend/infra/docker
+docker compose -f docker-compose.training.yml up -d --build
+```
+
+Tới ngày 16, bật thêm observability:
+
+```bash
+docker compose -f docker-compose.training.yml --profile observability up -d --build
+```
+
+Prometheus: `http://localhost:19090`, Grafana: `http://localhost:13000` với `admin/admin`.
+
+Mini stack mặc định chạy Keycloak tại `http://localhost:18080` và gateway verify access token
+thật bằng issuer/audience/JWKS. Trong bản training, gateway dùng `TOKEN_CONVERTER_MODE=local`:
+sau khi verify token Keycloak, gateway tự sinh internal JWT ngắn hạn để downstream service nhận
+`CurrentUser`.
+
+Keycloak admin console:
 
 ```text
-Client -> API Gateway -> Identity Service
-                 |              |
-                 |              -> AuthService / UserService / AuthzService
-                 |              -> Repository
-                 -> verify JWT va forward X-User-* headers
+URL: http://localhost:18080
+Username: admin
+Password: admin
 ```
 
-Request mau:
+Nếu cần cứu lớp khi chưa dựng được Keycloak, bật bypass tạm thời:
 
 ```bash
-# Terminal 1
-docker compose up -d news-postgres news-redis identity-postgres
-
-# Terminal 2
-cd identity-service
-mvn spring-boot:run
-
-# Terminal 3
-cd api-gateway
-mvn spring-boot:run
-
-# Terminal 4
-curl -X POST http://localhost:8081/users \
-  -H "Content-Type: application/json" \
-  -d '{"email":"student1@courseflow.local","password":"Student@123","displayName":"Student One"}'
+COURSEFLOW_TRAINING_AUTH_BYPASS=true docker compose -f docker-compose.training.yml up -d --build
 ```
 
-## Infra chung
-
-Root `docker-compose.yml` dung de chay cac dependency local cho cac bai training:
+Khi quay lại flow Keycloak thật, recreate gateway để bỏ env bypass khỏi container cũ:
 
 ```bash
-docker compose up -d news-postgres news-redis identity-postgres
+docker compose -f docker-compose.training.yml up -d --build --force-recreate api-gateway
 ```
 
-Service infra:
-
-| Service | Port host | Dung cho |
-| --- | --- | --- |
-| `news-postgres` | `5432` | database rieng cho `news` service |
-| `news-redis` | `6379` | cache cho `news` service |
-| `identity-postgres` | `5433` | database rieng cho `identity-service` |
-
-## Liquibase convention
-
-Ca `news` va `identity-service` dung cung convention voi CourseFlow:
+Luồng training vẫn phải học đầy đủ AuthN/AuthZ:
 
 ```text
-src/main/resources/db/changelog/db.changelog.xml
-src/main/resources/db/changelog/changes/001-init.sql
+Web login/session
+-> Keycloak/OIDC Authorization Code + PKCE
+-> API Gateway verify external access token
+-> Gateway xóa header giả mạo và set trusted headers
+-> Downstream service verify internal JWT
+-> CurrentUser vào service layer
+-> access-control RBAC + domain resource guard
+-> audit decision
 ```
 
-Them migration moi bang cach tao `changes/NNN-ten-thay-doi.sql` va include file do trong `db.changelog.xml`.
+Xem chi tiết ở [training-roadmap/auth-flow.html](training-roadmap/auth-flow.html).
 
-Repo nay dang co service `news` viet bang Java 21 + Spring Boot 3. Muc tieu tiep theo la mo phong High Availability (HA) tren local bang cach chay 2 instance `news`, sau do them mot service `api-gateway` dung Spring Cloud Gateway de route request xuong cac instance `news`.
+## Tài Khoản Demo Training
 
-## 1. HA hoat dong nhu the nao?
+Các tài khoản này có trong Keycloak realm import và được seed profile/RBAC trong database demo.
+Mật khẩu Keycloak cho tất cả tài khoản demo là `password`.
 
-HA (High Availability) la cach thiet ke he thong de service van tiep tuc phuc vu request khi mot phan cua he thong gap loi. Thay vi chi co 1 instance duy nhat, ta chay nhieu instance giong nhau va dat mot lop dieu phoi request o phia truoc.
+| User ID | Email | Password | Vai trò | Dùng cho |
+| --- | --- | --- | --- | --- |
+| `1` | `admin@courseflow.local` | `password` | `ADMIN` | Admin web, quản trị hệ thống |
+| `2` | `instructor@courseflow.local` | `password` | `INSTRUCTOR` | Admin web, course/assignment/quiz |
+| `4` | `student@courseflow.local` | `password` | `STUDENT` | Learner web, enrollment/chat/quiz |
+| `5` | `student2@courseflow.local` | `password` | `STUDENT` | Learner web, user phụ để demo nhiều học viên |
 
-Luon tu duy theo flow:
+Đăng nhập admin web ở `http://localhost:5173/login`, learner web ở `http://localhost:3000/login`.
+
+Tạo learner mới thuộc bài Ngày 03 - User admin và profile. Mini stack hỗ trợ hai luồng:
+admin web tạo learner qua `POST /api/admin/v1/users`, hoặc learner tự đăng ký ở
+`http://localhost:3000/register` qua Keycloak registration. Admin/backoffice phải dùng
+`POST /api/admin/v1/users`; không dùng trang `/register` để admin tạo hộ learner. Cả hai luồng đều
+phải đi qua gateway, link `issuer + subject` trong access-control và nhận role mặc định `STUDENT`.
+
+## Quy Tắc SSO Khi Test Nhiều User
+
+Admin web, learner web và mobile app là các OIDC client khác nhau nhưng cùng realm Keycloak
+`courseflow`. Vì vậy cùng một browser profile chỉ có một SSO user đang active cho realm đó.
+
+- Mở admin web và learner web cùng lúc với cùng user là đúng SSO.
+- Muốn test `admin@courseflow.local` và `student@courseflow.local` đồng thời, dùng browser profile
+  khác nhau, hoặc normal window + incognito.
+- Nếu đang login admin rồi mở learner `/register`, Keycloak có thể báo
+  `different_user_authenticated`. Đây là behavior đúng: registration dành cho visitor chưa có SSO
+  session của user khác.
+- Luồng chuẩn để admin tạo learner vẫn là admin web -> `POST /api/admin/v1/users` -> Keycloak Admin
+  API -> access-control -> user-management profile.
+
+Fallback khi bật `COURSEFLOW_TRAINING_AUTH_BYPASS=true`: mở DevTools Console và tạo session demo.
+
+```js
+localStorage.setItem("courseflow.admin.session", JSON.stringify({
+  accessToken: "training",
+  refreshToken: "",
+  user: {
+    id: 1,
+    email: "admin@courseflow.local",
+    fullName: "CourseFlow Admin",
+    role: "ADMIN",
+    status: "ACTIVE"
+  }
+}));
+location.href = "/dashboard";
+```
+
+```js
+localStorage.setItem("courseflow.admin.session", JSON.stringify({
+  accessToken: "training",
+  refreshToken: "",
+  user: {
+    id: 2,
+    email: "instructor@courseflow.local",
+    fullName: "Demo Instructor",
+    role: "INSTRUCTOR",
+    status: "ACTIVE"
+  }
+}));
+location.href = "/dashboard";
+```
+
+Đăng nhập learner web ở `http://localhost:3000`: mở DevTools Console và chạy:
+
+```js
+localStorage.setItem("courseflow.learning.session", JSON.stringify({
+  accessToken: "training",
+  refreshToken: "",
+  user: {
+    id: 4,
+    email: "student@courseflow.local",
+    fullName: "Demo Learner",
+    role: "STUDENT",
+    status: "ACTIVE"
+  }
+}));
+location.reload();
+```
+
+Để đổi user, sửa `id/email/fullName/role` theo bảng trên rồi reload trang.
+
+## Build Backend
+
+```bash
+cd backend
+mvn -DskipTests compile
+```
+
+## Cấu Trúc Chính
 
 ```text
-Client -> API Gateway / Load Balancer -> News instance 1
-                                    \-> News instance 2
-                                    \-> News instance N
-
-News instances -> PostgreSQL / Redis / external dependencies
+backend/                  CourseFlow Mini backend services
+web/react-admin/          Admin/instructor UI, giữ làm contract/demo
+web/next-learning/        Learner web UI, giữ làm contract/demo
+app/                      Flutter learner app, giữ làm contract/demo
+training-roadmap/         HTML roadmap, API/DB/TODO docs
 ```
 
-Nhung thanh phan quan trong:
+## Nguyên Tắc Hướng Dẫn
 
-- **Nhieu instance cua cung mot service**: cac instance `news` cung chay mot codebase, nhung lang nghe tren cac port hoac host khac nhau.
-- **Load balancing**: API Gateway hoac Load Balancer chia request xuong cac instance dang san sang nhan request.
-- **Health check**: he thong can biet instance nao con song, instance nao loi de khong route request vao instance loi.
-- **Stateless service**: service nen han che luu state trong memory cua tung instance. State quan trong nen nam o database, cache, message broker hoac storage dung chung.
-- **Failover**: neu mot instance chet, traffic duoc chuyen sang instance con lai.
-- **Observability**: log, metric, trace va health endpoint giup phat hien loi nhanh hon.
-
-Trong bai local nay, ta mo phong HA bang 2 process `news` chay tren 2 port khac nhau. Day chua phai HA day du nhu production, nhung giup thuc tap sinh hieu request duoc route qua gateway/load balancer nhu the nao.
-
-## 2. Chay 2 service news tren local
-
-Yeu cau:
-
-- JDK 21
-- Maven
-- Docker va Docker Compose
-
-Khoi dong PostgreSQL va Redis truoc:
-
-```bash
-cd news
-docker compose up -d postgres redis
-```
-
-Terminal 1: chay instance `news` thu nhat tren port `8081`:
-
-```bash
-cd news
-SERVER_PORT=8081 mvn spring-boot:run
-```
-
-Terminal 2: chay instance `news` thu hai tren port `8082`:
-
-```bash
-cd news
-SERVER_PORT=8082 mvn spring-boot:run
-```
-
-Kiem tra health:
-
-```bash
-curl http://localhost:8081/actuator/health
-curl http://localhost:8082/actuator/health
-```
-
-Swagger UI cua tung instance:
-
-- http://localhost:8081/swagger-ui.html
-- http://localhost:8082/swagger-ui.html
-
-Vi 2 instance dung chung PostgreSQL va Redis, du lieu tao o instance `8081` co the doc lai tu instance `8082`, va nguoc lai. Neu gap loi Liquibase khi start dong thoi, hay start instance thu nhat xong roi moi start instance thu hai.
-
-Co the build jar va chay bang `java -jar`:
-
-```bash
-cd news
-mvn -DskipTests package
-SERVER_PORT=8081 java -jar target/news-0.0.1-SNAPSHOT.jar
-SERVER_PORT=8082 java -jar target/news-0.0.1-SNAPSHOT.jar
-```
-
-## 3. Folder api-gateway
-
-Folder `api-gateway/` duoc tao san o root repo va dang de trong. Yeu cau thuc tap sinh tu tim hieu API Gateway truoc khi code.
-
-Can tim hieu cac y chinh:
-
-- API Gateway la gi va khac Load Balancer nhu the nao.
-- Gateway route request xuong backend service nhu the nao.
-- Gateway co the xu ly cross-cutting concerns nao: authentication, authorization, rate limit, logging, timeout, retry, CORS, request/response filter.
-- Cach gateway phoi hop voi health check va load balancing de tang HA.
-- Khi nao nen route theo path, theo host, theo header hoac theo version API.
-
-## 4. Bai tap tao service gateway bang Spring Cloud Gateway
-
-Sau khi tim hieu, tao mot Spring Boot service moi trong folder `api-gateway/`.
-
-Goi y dependency:
-
-- `spring-cloud-starter-gateway`
-- `spring-cloud-starter-loadbalancer`
-- `spring-boot-starter-actuator`
-
-Gateway chay tren port `8080`. Hai instance `news` chay tren `8081` va `8082`. Request vao gateway theo path `/api/news` hoac `/api/news/**` phai duoc route xuong `news`.
-
-Vi du cau hinh mong doi trong `api-gateway/src/main/resources/application.yml`:
-
-```yaml
-server:
-  port: 8080
-
-spring:
-  application:
-    name: api-gateway
-  cloud:
-    discovery:
-      client:
-        simple:
-          instances:
-            news-service:
-              - uri: http://localhost:8081
-              - uri: http://localhost:8082
-    gateway:
-      routes:
-        - id: news-service
-          uri: lb://news-service
-          predicates:
-            - Path=/api/news,/api/news/**
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-```
-
-Khi hoan thanh, thu tu chay local:
-
-```bash
-# Terminal 1
-cd news
-docker compose up -d postgres redis
-SERVER_PORT=8081 mvn spring-boot:run
-
-# Terminal 2
-cd news
-SERVER_PORT=8082 mvn spring-boot:run
-
-# Terminal 3
-cd api-gateway
-mvn spring-boot:run
-```
-
-Kiem tra request qua gateway:
-
-```bash
-curl http://localhost:8080/actuator/health
-curl http://localhost:8080/api/news
-curl -X POST http://localhost:8080/api/news \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "Tin qua gateway",
-    "summary": "Tao tu API Gateway",
-    "content": "Noi dung chi tiet",
-    "author": "intern",
-    "status": "PUBLISHED"
-  }'
-```
-
-Ket qua can dat:
-
-- Gateway start thanh cong tren port `8080`.
-- Route `/api/news` va `/api/news/**` xuong 2 instance `news`.
-- Neu stop mot instance `news`, gateway van co the goi sang instance con lai.
-- README rieng trong `api-gateway/` giai thich cach chay va cach test gateway.
+- Không đưa source rồi bỏ mặc kiểu “tự làm tiếp”.
+- Không cho full DB schema ngay từ đầu.
+- Không để mỗi nhóm tự nghĩ endpoint khác nhau.
+- Không bắt test coverage trong phase đầu.
+- Bắt buộc review DB design trước khi code.
+- Bắt buộc demo được bằng API evidence.
+- Bắt buộc ghi rõ AI đã giúp gì và người học đã verify lại thế nào.

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 11 - Notification và outbox</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a class="active" href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 11: Notification và outbox</h2>
+          <p>Dùng event/outbox để tạo notification sau các nghiệp vụ chính.</p>
+          <div class="meta">
+            <span class="badge">Notification</span>
+            <span class="badge">Outbox</span>
+            <span class="badge">Idempotency</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Business["Enrollment/Grade transaction"] --> DomainDB[("domain DB update")]
+  Business --> Outbox[("outbox event<br/>same transaction")]
+  Outbox --> Relay["outbox-relay"]
+  Relay --> Kafka["Kafka topic"]
+  Kafka --> Consumer["notification consumer"]
+  Consumer --> Idem["eventId idempotency"]
+  Idem --> NotificationDB[("notification DB")]
+  NotificationDB --> API["list / mark read"]
+  LearnerWeb["Learner web"] --> API
+  MobileApp["Mobile app"] --> API
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Business transaction ghi outbox event.</li>
+            <li>Consumer/relay tạo notification từ event.</li>
+            <li>User list và mark read notification.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Đọc notification-service và outbox-relay: outbox table, relay polling, Kafka topic, notification inbox/read state.</li>
+            <li>Chốt event nào tạo notification trong training: enrollment.created, submission.graded, quiz.completed hoặc course.published.</li>
+            <li>Trong producer service, ghi outbox cùng transaction với business change; không publish Kafka trực tiếp trước khi DB commit.</li>
+            <li>Outbox record cần có aggregateId, aggregateType, eventType, payload JSON, createdAt, publishedAt/null, retry/dead-letter nếu đã có schema.</li>
+            <li>outbox-relay poll unpublished theo batch nhỏ, publish Kafka, mark published; nếu publish fail thì retry và không mất record.</li>
+            <li>Consumer notification-service parse event, build notification target user, title, body, type, link, eventId.</li>
+            <li>Idempotency consumer: eventId unique hoặc processed marker; Kafka redelivery không tạo duplicate notification.</li>
+            <li>List my notifications: current user only, paging, unread first hoặc createdAt desc.</li>
+            <li>Mark read: chỉ owner được mark; idempotent nếu đã read.</li>
+            <li>Unread count endpoint nếu web cần badge; count theo userId + readAt null.</li>
+            <li>Error handling: event payload thiếu field quan trọng thì log + dead-letter/skip có reason, không crash loop vô hạn.</li>
+            <li>Evidence bắt buộc: grade submission sinh notification, list thấy unread, mark read giảm count, replay cùng event không duplicate.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Enroll course tạo notification cho learner.</li>
+            <li>Grade update tạo notification cho learner.</li>
+            <li>List notification có unread/read state.</li>
+            <li>Xử lý lại cùng event không tạo notification trùng.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>Trigger: enroll course hoặc update grade
+Expected:
+- outbox có event
+- notification-service có notification cho learner
+
+GET /api/v1/notifications
+Authorization: Bearer &lt;student_token&gt;
+Expected: notification mới
+
+POST /api/v1/notifications/{id}/read
+Expected: readAt được set
+
+Negative:
+- replay eventId cũ -&gt; không duplicate</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-10.html">Ngày 10 - Gradebook</a>
+          <a href="day-12.html">Ngày 12 - Chat</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

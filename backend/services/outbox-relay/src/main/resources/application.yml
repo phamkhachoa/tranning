@@ -1,0 +1,68 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: outbox-relay
+  datasource:
+    url: ${OUTBOX_RELAY_DB_URL:jdbc:postgresql://localhost:5432/cf_outbox}
+    username: ${OUTBOX_RELAY_DB_USERNAME:courseflow}
+    password: ${OUTBOX_RELAY_DB_PASSWORD:courseflow}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog.xml
+    contexts: ${SPRING_LIQUIBASE_CONTEXTS:prod}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      properties:
+        enable.idempotence: true
+        delivery.timeout.ms: 120000
+
+# CourseFlow Mini drains only the training services. Add a service here only when interns
+# explicitly create an outbox_events table for that module.
+courseflow:
+  outbox:
+    poll-interval-ms: ${OUTBOX_POLL_INTERVAL_MS:1000}
+    max-attempts: ${OUTBOX_MAX_ATTEMPTS:5}
+    metrics-refresh-ms: ${OUTBOX_METRICS_REFRESH_MS:30000}
+    replay-lease-seconds: ${OUTBOX_REPLAY_LEASE_SECONDS:300}
+    purge-enabled: ${OUTBOX_PURGE_ENABLED:false}
+    retention-days: ${OUTBOX_RETENTION_DAYS:7}
+    services:
+      - name: enrollment
+        jdbc-url: ${ENROLLMENT_DB_URL:jdbc:postgresql://localhost:5432/cf_enrollment}
+        username: ${ENROLLMENT_DB_USERNAME:courseflow}
+        password: ${ENROLLMENT_DB_PASSWORD:courseflow}
+      - name: assignment
+        jdbc-url: ${ASSIGNMENT_DB_URL:jdbc:postgresql://localhost:5432/cf_assignment}
+        username: ${ASSIGNMENT_DB_USERNAME:courseflow}
+        password: ${ASSIGNMENT_DB_PASSWORD:courseflow}
+      - name: quiz
+        jdbc-url: ${QUIZ_DB_URL:jdbc:postgresql://localhost:5432/cf_quiz}
+        username: ${QUIZ_DB_USERNAME:courseflow}
+        password: ${QUIZ_DB_PASSWORD:courseflow}
+      - name: gradebook
+        jdbc-url: ${GRADEBOOK_DB_URL:jdbc:postgresql://localhost:5432/cf_gradebook}
+        username: ${GRADEBOOK_DB_USERNAME:courseflow}
+        password: ${GRADEBOOK_DB_PASSWORD:courseflow}
+      - name: course
+        jdbc-url: ${COURSE_DB_URL:jdbc:postgresql://localhost:5432/cf_course}
+        username: ${COURSE_DB_USERNAME:courseflow}
+        password: ${COURSE_DB_PASSWORD:courseflow}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+

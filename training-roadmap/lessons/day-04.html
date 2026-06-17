@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 04 - Course CRUD</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a class="active" href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 04: Course CRUD</h2>
+          <p>Implement CRUD đủ dùng cho admin/instructor và catalog public cho learner.</p>
+          <div class="meta">
+            <span class="badge">Course Service</span>
+            <span class="badge">CRUD</span>
+            <span class="badge">Catalog</span>
+            <span class="badge">mediaId reference</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Instructor["Instructor<br/>Admin web"] --> GW["Gateway"]
+  MobileStaff["Instructor mobile app<br/>same API"] --> GW
+  GW --> CourseAPI["course-service<br/>admin authoring API"]
+  CourseAPI --> Rules["Service rules<br/>owner + validation + duplicate slug"]
+  Rules --> DB[("course DB<br/>course, module, lesson")]
+  CourseAPI -. optional mediaId .-> Media["media-service<br/>ready-made platform service"]
+  Media --> MinIO[("MinIO<br/>courseflow-media")]
+  Learner["Learner web"] --> Catalog["GET /api/v1/courses"]
+  MobileLearner["Mobile app"] --> Catalog
+  Catalog --> PublicRule["status=PUBLISHED only"]
+  PublicRule --> DB
+  DB --> CatalogResult["catalog page"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Instructor tạo và sửa course draft.</li>
+            <li>Course/module item có thể lưu <code>mediaId</code> lấy từ media-service, không tự upload file trong course-service.</li>
+            <li>Admin/instructor list course có filter/paging.</li>
+            <li>Public catalog chỉ hiển thị course published.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Đọc <code>course-service</code> controller/service/entity/migration hiện có: courses, course_versions, course_modules, module_items, course_materials.</li>
+            <li>Chốt aggregate boundary: course-service sở hữu course/module/item metadata; media-service sở hữu file/video metadata và MinIO object key; course chỉ lưu <code>mediaId</code>/<code>videoMediaId</code>.</li>
+            <li>Thiết kế request tạo course draft: code, title, slug, summary, departmentId, level, listPrice/currency nếu dùng pricing; ownerId lấy từ CurrentUser, không nhận từ body.</li>
+            <li>Migration/index cần có: unique code, unique slug, index status, index owner/department nếu admin list filter theo các field này.</li>
+            <li>Implement create draft trong service layer transaction: validate role instructor/admin, validate department scope nếu có, normalize slug/code, set status DRAFT, reviewState DRAFT.</li>
+            <li>Implement update draft: chỉ owner/staff được sửa, chỉ course mutable state mới sửa được; không cho update status bằng endpoint update thường.</li>
+            <li>Implement module/item CRUD tối thiểu nếu lesson cần curriculum: create module, create item, reorder, archive item; dùng position unique theo module/course.</li>
+            <li>Khi item là VIDEO/DOCUMENT, gọi media-service trước để có media/video id; course-service không upload file, không đọc MinIO bucket trực tiếp.</li>
+            <li>Public catalog endpoint chỉ đọc PUBLISHED/published snapshot; admin endpoint được filter DRAFT/IN_REVIEW/PUBLISHED.</li>
+            <li>DTO public phải loại bỏ field nội bộ như review note, draft-only data, internal audit nếu không cần cho learner.</li>
+            <li>Xử lý lỗi: duplicate slug 409, update published trực tiếp 400/409, student create course 403, mediaId sai format 400.</li>
+            <li>Evidence bắt buộc: instructor tạo draft, update title/summary, add module/item có mediaId, public catalog không thấy draft, admin list thấy draft.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li><code>POST /api/admin/v1/courses</code> tạo draft.</li>
+            <li><code>PATCH /api/admin/v1/courses/{id}</code> sửa draft.</li>
+            <li><code>GET /api/admin/v1/courses?status=DRAFT</code> có paging.</li>
+            <li><code>GET /api/v1/courses</code> không trả draft.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>POST /api/admin/v1/courses
+Authorization: Bearer &lt;instructor_token&gt;
+Body: {"title":"Java Backend","slug":"java-backend","summary":"..."}
+Expected: 201, status DRAFT
+
+Optional media setup:
+POST /api/admin/v1/media/videos/upload-url
+PUT file lên MinIO bằng signed URL
+POST /api/admin/v1/media/videos
+Sau đó lưu videoId/mediaId vào module item
+
+GET /api/v1/courses
+Expected: không có course DRAFT
+
+Negative:
+- slug trùng -&gt; 409
+- student tạo course -&gt; 403</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-03.html">Ngày 03 - User Admin</a>
+          <a href="day-05.html">Ngày 05 - Publish</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,198 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      # TODO(training-day-17-impl): Add gateway-level protection for hot public APIs.
+      # Step 1: Add Redis-backed RequestRateLimiter for /api/v1/search/** and other spam-prone paths.
+      # Step 2: Choose a key resolver: authenticated user id first, then IP for anonymous public APIs.
+      # Step 3: Return 429 with the standard ErrorDto shape and expose a rate-limit rejection metric.
+      routes:
+        - id: user-management-current-user
+          uri: ${USER_MANAGEMENT_SERVICE_URI:lb://user-management-service}
+          predicates:
+            - Path=/api/v1/users/me,/api/v1/users/me/profile
+          filters:
+            - RewritePath=/api/v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: user-management-public-profiles
+          uri: ${USER_MANAGEMENT_SERVICE_URI:lb://user-management-service}
+          predicates:
+            - Path=/api/v1/profiles/**
+          filters:
+            - RewritePath=/api/v1/(?<segment>.*), /public/$\{segment}
+
+        - id: access-control-admin-user-assignments
+          uri: ${ACCESS_CONTROL_SERVICE_URI:lb://access-control-service}
+          predicates:
+            - Path=/api/admin/v1/users/*/assignments,/api/admin/v1/users/*/assignments/**,/api/admin/v1/users/*/assignments:export
+          filters:
+            - RewritePath=/api/admin/v1/(?<segment>users/.+), /internal/$\{segment}
+
+        - id: user-management-admin-users-root-create
+          uri: ${USER_MANAGEMENT_SERVICE_URI:lb://user-management-service}
+          predicates:
+            - Path=/api/admin/v1/users,/api/admin/v1/users/
+          filters:
+            - RewritePath=/api/admin/v1/users/?$, /backoffice/admin-users
+
+        - id: user-management-admin-users-lifecycle
+          uri: ${USER_MANAGEMENT_SERVICE_URI:lb://user-management-service}
+          predicates:
+            - Path=/api/admin/v1/users/*/privacy-export,/api/admin/v1/users/*/deactivate
+          filters:
+            - RewritePath=/api/admin/v1/users/(?<userId>[^/]+)/(?<action>privacy-export|deactivate)$, /backoffice/admin-users/$\{userId}/$\{action}
+
+        - id: user-management-admin-users-detail
+          uri: ${USER_MANAGEMENT_SERVICE_URI:lb://user-management-service}
+          predicates:
+            - Path=/api/admin/v1/users/*
+          filters:
+            - RewritePath=/api/admin/v1/users/(?<userId>[^/]+)$, /backoffice/admin-users/$\{userId}
+
+        - id: user-management-admin-directory
+          uri: ${USER_MANAGEMENT_SERVICE_URI:lb://user-management-service}
+          predicates:
+            - Path=/api/admin/v1/user-directory
+          filters:
+            - RewritePath=/api/admin/v1/user-directory$, /backoffice/users
+
+        - id: access-control-admin
+          uri: ${ACCESS_CONTROL_SERVICE_URI:lb://access-control-service}
+          predicates:
+            - Path=/api/admin/v1/roles,/api/admin/v1/roles/**,/api/admin/v1/permissions
+          filters:
+            - RewritePath=/api/admin/v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: course-admin
+          uri: ${COURSE_SERVICE_URI:lb://course-service}
+          predicates:
+            - Path=/api/admin/v1/courses,/api/admin/v1/courses/**,/api/admin/v1/authoring/**
+          filters:
+            - RewritePath=/api/admin/v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: course-public
+          uri: ${COURSE_SERVICE_URI:lb://course-service}
+          predicates:
+            - Path=/api/v1/courses,/api/v1/courses/**
+          filters:
+            - RewritePath=/api/v1/(?<segment>.*), /public/$\{segment}
+
+        - id: enrollment-user
+          uri: ${ENROLLMENT_SERVICE_URI:lb://enrollment-service}
+          predicates:
+            - Path=/api/v1/enrollments,/api/v1/enrollments/**
+          filters:
+            - RewritePath=/api/v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: enrollment-admin
+          uri: ${ENROLLMENT_SERVICE_URI:lb://enrollment-service}
+          predicates:
+            - Path=/api/admin/v1/enrollments,/api/admin/v1/enrollments/**
+          filters:
+            - RewritePath=/api/admin/v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: assignment
+          uri: ${ASSIGNMENT_SERVICE_URI:lb://assignment-service}
+          predicates:
+            - Path=/api/v1/assignments,/api/v1/assignments/**,/api/v1/submissions/**,/api/admin/v1/assignments,/api/admin/v1/assignments/**,/api/admin/v1/submissions/**
+          filters:
+            - RewritePath=/api/(?:admin/)?v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: media
+          uri: ${MEDIA_SERVICE_URI:lb://media-service}
+          predicates:
+            - Path=/api/v1/media,/api/v1/media/**,/api/admin/v1/media,/api/admin/v1/media/**
+          filters:
+            - RewritePath=/api/(?:admin/)?v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: chat-rest
+          uri: ${CHAT_SERVICE_URI:lb://chat-service}
+          predicates:
+            - Path=/api/v1/chat,/api/v1/chat/**
+          filters:
+            - RewritePath=/api/v1/(?<segment>chat/.*), /internal/$\{segment}
+
+        - id: chat-websocket
+          uri: ${CHAT_SERVICE_WS_URI:ws://localhost:8111}
+          predicates:
+            - Path=/ws/chat,/ws/chat/**
+
+        - id: quiz
+          uri: ${QUIZ_SERVICE_URI:lb://quiz-service}
+          predicates:
+            - Path=/api/v1/quizzes,/api/v1/quizzes/**,/api/admin/v1/quizzes,/api/admin/v1/quizzes/**
+          filters:
+            - RewritePath=/api/(?:admin/)?v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: gradebook
+          uri: ${GRADEBOOK_SERVICE_URI:lb://gradebook-service}
+          predicates:
+            - Path=/api/v1/gradebook,/api/v1/gradebook/**,/api/admin/v1/gradebook,/api/admin/v1/gradebook/**
+          filters:
+            - RewritePath=/api/(?:admin/)?v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: notification
+          uri: ${NOTIFICATION_SERVICE_URI:lb://notification-service}
+          predicates:
+            - Path=/api/v1/notifications,/api/v1/notifications/**,/api/admin/v1/notifications,/api/admin/v1/notifications/**
+          filters:
+            - RewritePath=/api/(?:admin/)?v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: search-public
+          uri: ${SEARCH_SERVICE_URI:lb://search-service}
+          predicates:
+            - Path=/api/v1/search,/api/v1/search/**
+          filters:
+            - RewritePath=/api/v1/(?<segment>.*), /public/$\{segment}
+
+        - id: search-admin
+          uri: ${SEARCH_SERVICE_URI:lb://search-service}
+          predicates:
+            - Path=/api/admin/v1/search,/api/admin/v1/search/**
+          filters:
+            - RewritePath=/api/admin/v1/(?<segment>.*), /internal/$\{segment}
+
+        - id: outbox-admin
+          uri: ${OUTBOX_RELAY_SERVICE_URI:lb://outbox-relay}
+          predicates:
+            - Path=/api/admin/v1/outbox,/api/admin/v1/outbox/**
+          filters:
+            - RewritePath=/api/admin/v1/(?<segment>.*), /internal/$\{segment}
+
+courseflow:
+  training:
+    # Keep false for the normal training stack: web logs in through Keycloak and the gateway verifies OIDC.
+    # Set COURSEFLOW_TRAINING_AUTH_BYPASS=true only as a local fallback when Keycloak is not available.
+    auth-bypass: ${COURSEFLOW_TRAINING_AUTH_BYPASS:false}
+  security:
+    external-token:
+      issuer: ${KEYCLOAK_ISSUER_URI:http://localhost:18080/realms/courseflow}
+      jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:18080/realms/courseflow/protocol/openid-connect/certs}
+      audiences: ${KEYCLOAK_AUDIENCE:courseflow-api}
+    token-converter:
+      mode: ${TOKEN_CONVERTER_MODE:required}
+      uri: ${TOKEN_CONVERTER_URI:http://localhost:8180}
+      audience: ${COURSEFLOW_INTERNAL_JWT_AUDIENCE:courseflow-services}
+      timeout-ms: ${TOKEN_CONVERTER_TIMEOUT_MS:800}
+      client-id: ${COURSEFLOW_STS_CLIENT_ID:${spring.application.name:api-gateway}}
+      client-secret: ${COURSEFLOW_STS_CLIENT_SECRET:}
+    internal-jwt:
+      algorithm: ${COURSEFLOW_INTERNAL_JWT_ALGORITHM:HS256}
+      secret: ${COURSEFLOW_INTERNAL_JWT_SECRET:courseflow-training-internal-jwt-secret-32bytes}
+      verification-mode: ${COURSEFLOW_INTERNAL_JWT_VERIFICATION_MODE:local}
+      audience: ${COURSEFLOW_INTERNAL_JWT_AUDIENCE:courseflow-services}
+      service-token-mode: ${COURSEFLOW_INTERNAL_SERVICE_TOKEN_MODE:local}
+      token-converter-uri: ${TOKEN_CONVERTER_URI:}
+      sts-client-secret: ${COURSEFLOW_STS_CLIENT_SECRET:}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,http://localhost:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

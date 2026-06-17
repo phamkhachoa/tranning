@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Service TODO - CourseFlow Mini</title>
+  <link rel="stylesheet" href="assets/roadmap.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="index.html">Tổng quan</a>
+      <a href="system-overview.html">System Overview</a>
+      <a href="api-contract.html">API Contract</a>
+      <a href="auth-flow.html">Auth Flow</a>
+      <a href="db-design-guide.html">DB Design</a>
+      <a class="active" href="service-todo.html">Service TODO</a>
+      <a href="lessons/day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="lessons/day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="lessons/day-03.html">Ngày 03 - User Admin</a>
+      <a href="lessons/day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="lessons/day-05.html">Ngày 05 - Publish</a>
+      <a href="lessons/day-06.html">Ngày 06 - Enrollment</a>
+      <a href="lessons/day-07.html">Ngày 07 - Progress</a>
+      <a href="lessons/day-08.html">Ngày 08 - Assignment</a>
+      <a href="lessons/day-09.html">Ngày 09 - Quiz</a>
+      <a href="lessons/day-10.html">Ngày 10 - Gradebook</a>
+      <a href="lessons/day-11.html">Ngày 11 - Notification</a>
+      <a href="lessons/day-12.html">Ngày 12 - Chat</a>
+      <a href="lessons/day-13.html">Ngày 13 - Search</a>
+      <a href="lessons/day-14.html">Ngày 14 - Integration QA</a>
+      <a href="lessons/day-15.html">Ngày 15 - Demo Review</a>
+      <a href="lessons/day-16.html">Ngày 16 - Observability</a>
+      <a href="lessons/day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="lessons/day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Khung method, không cho sẵn implementation</h2>
+          <p>
+            TODO nằm trực tiếp trong service để người học không phải đoán nên sửa ở đâu.
+            Đọc trang này như checklist nhanh, sau đó quay lại source để đề xuất DB và implement.
+          </p>
+        </section>
+
+        <section class="panel">
+          <h2>Tìm TODO trong code</h2>
+          <p>Mỗi bài thực hành có comment ngay tại method hoặc DTO cần sửa.</p>
+          <pre><code>cd /Users/hoapham/Downloads/tranning/v2/tranning
+rg 'TODO\(training' backend/services</code></pre>
+          <ul>
+            <li><code>TODO(training-day-XX-impl)</code>: điểm học viên phải implement hoặc harden, có Step 1/2/3 ngay trong comment.</li>
+            <li><code>TRAINING(...)</code>: API contract, request shape, repo query hoặc platform reference đã có sẵn để đọc hiểu.</li>
+            <li>Không xóa TODO cho đến khi có manual API evidence: happy path, error path, read-back query.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>TODO mẫu theo service</h2>
+          <div class="grid">
+            <div class="card">
+              <h3>user-management-service</h3>
+              <pre><code>currentProfile(user)
+updateMyProfile(user, request)
+adminSearchUsers(query, page)
+deactivateUser(userId, reason)</code></pre>
+              <p>Focus: validation, response không leak field nhạy cảm, trạng thái user.</p>
+            </div>
+            <div class="card">
+              <h3>access-control-service</h3>
+              <pre><code>assignRole(subject, role, scope)
+checkPermission(subject, action, resource)
+listRoleAssignments(subject)
+recordAuthzDecision(decision)</code></pre>
+              <p>Focus: RBAC, scope, audit reason, admin permission.</p>
+            </div>
+            <div class="card">
+              <h3>course-service</h3>
+              <pre><code>createDraft(request, instructor)
+updateDraft(courseId, request, user)
+submitForReview(courseId, user)
+publish(courseId, reviewer)
+listPublicCatalog(filter)</code></pre>
+              <p>Focus: CRUD, status transition, readiness, public/private data split.</p>
+            </div>
+            <div class="card">
+              <h3>enrollment-service</h3>
+              <pre><code>enroll(courseId, learner, idempotencyKey)
+listMyEnrollments(learner)
+cancelEnrollment(enrollmentId, learner)
+markLessonComplete(courseId, itemId, learner)</code></pre>
+              <p>Focus: transaction, duplicate prevention, progress percent.</p>
+            </div>
+            <div class="card">
+              <h3>assignment-service</h3>
+              <pre><code>createAssignment(courseId, request, instructor)
+submitAssignment(assignmentId, request, learner)
+listSubmissions(assignmentId, instructor)
+gradeSubmission(submissionId, request, instructor)</code></pre>
+              <p>Focus: lifecycle, deadline optional, feedback, score range.</p>
+            </div>
+            <div class="card">
+              <h3>media-service</h3>
+              <pre><code>requestUploadUrl(request, user)
+registerVideo(request, staff)
+readiness(videoId)
+playbackUrl(videoId, user)</code></pre>
+              <p>Platform reference: giữ nguyên từ project chính. Người học dùng API và MinIO console, không phải implement lại.</p>
+            </div>
+            <div class="card">
+              <h3>discovery-service</h3>
+              <pre><code>open Eureka dashboard
+check registered instances
+compare gateway route vs discovery registry</code></pre>
+              <p>Platform reference: dùng để giải thích service discovery, không phải bài code.</p>
+            </div>
+            <div class="card">
+              <h3>chat-service</h3>
+              <pre><code>GET  /api/v1/chat/courses/{courseId}/room
+GET  /api/v1/chat/courses/{courseId}/messages?before=&limit=
+POST /api/v1/chat/courses/{courseId}/messages
+WS   /ws/chat
+SUB  /topic/courses/{courseId}/chat
+SEND /app/courses/{courseId}/send</code></pre>
+              <p>Focus: REST fallback, realtime STOMP, MongoDB history, course access guard, no senderId in body.</p>
+            </div>
+            <div class="card">
+              <h3>quiz-service</h3>
+              <pre><code>createQuiz(courseId, request, instructor)
+startAttempt(quizId, learner)
+submitAttempt(quizId, attemptId, answers, learner)
+calculateScore(quiz, answers)</code></pre>
+              <p>Focus: nested validation, attempt status, no answer leakage.</p>
+            </div>
+            <div class="card">
+              <h3>gradebook-service</h3>
+              <pre><code>recordGrade(sourceEvent)
+recalculateCourseGrade(courseId, learnerId)
+getMyGrades(learner)
+getCourseGradebook(courseId, instructor)</code></pre>
+              <p>Focus: aggregation, pass/fail, privacy.</p>
+            </div>
+            <div class="card">
+              <h3>notification-service</h3>
+              <pre><code>createFromEvent(event)
+listMyNotifications(user)
+markAsRead(notificationId, user)
+deduplicate(eventId)</code></pre>
+              <p>Focus: idempotency, unread count, event-to-notification mapping.</p>
+            </div>
+            <div class="card">
+              <h3>search-service</h3>
+              <pre><code>indexPublishedCourse(event)
+searchCourses(query, filter, page)
+suggestCourses(prefix, limit)
+recommendCourses(query, level, departmentId)
+removeArchivedCourse(courseId)</code></pre>
+              <p>Focus: Debezium CDC consumer, Elasticsearch analyzer, autocomplete, recommendation-lite; không dùng SQL LIKE hoặc DB polling.</p>
+            </div>
+            <div class="card">
+              <h3>Debezium/Kafka Connect</h3>
+              <pre><code>enable wal_level=logical
+register courseflow-course-search-cdc
+inspect courseflow.course.public.courses
+verify connector status RUNNING
+replay/update course row and check ES</code></pre>
+              <p>Platform infrastructure cho ngày 13: học viên cấu hình, quan sát và debug connector.</p>
+            </div>
+            <div class="card">
+              <h3>outbox-relay</h3>
+              <pre><code>pollOutbox(service)
+publishEvent(record)
+markPublished(record)
+moveToDeadLetter(record, reason)</code></pre>
+              <p>Focus: at-least-once, retry, dead letter optional.</p>
+            </div>
+            <div class="card">
+              <h3>observability</h3>
+              <pre><code>GET /actuator/health
+GET /actuator/prometheus
+open Prometheus /targets
+trace X-Correlation-Id in logs
+define service-down alert</code></pre>
+              <p>Focus: correlation id, metric label hygiene, Prometheus scrape, Grafana dashboard, alert rule.</p>
+            </div>
+            <div class="card">
+              <h3>cache/rate-limit/resilience</h3>
+              <pre><code>cache catalog/search response
+choose cache key + TTL
+limit public/search-heavy endpoint
+add client timeout
+retry only idempotent calls
+fail closed for authz dependency</code></pre>
+              <p>Focus: Redis cache-aside, gateway rate limit, bounded timeout/retry, no Redis as source of truth.</p>
+            </div>
+            <div class="card">
+              <h3>API contract/release</h3>
+              <pre><code>document request/response DTO
+standardize ErrorDto
+add stable errorCode
+mark server-owned fields
+write migration rollback note
+write smoke commands</code></pre>
+              <p>Focus: web/app contract, backward compatibility, release readiness, rollback plan.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Manual verification thay cho test bắt buộc</h2>
+          <p>Trong phase này mỗi ticket cần có ít nhất 3 lệnh curl hoặc HTTP request:</p>
+          <ul>
+            <li>Happy path thành công.</li>
+            <li>Một business error, ví dụ duplicate enrollment hoặc forbidden publish.</li>
+            <li>Một list/detail query chứng minh dữ liệu đã lưu đúng.</li>
+          </ul>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

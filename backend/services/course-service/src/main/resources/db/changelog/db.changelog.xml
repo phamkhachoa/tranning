@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Single master changelog for course-service.
+  Add a new migration by dropping a NNN-*.sql under db/changelog/changes/ and
+  registering it here as a new <include>. Keep includes in numeric order.
+-->
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <include file="db/changelog/changes/001-init.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/002-rich-lesson-items.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/003-item-progress.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/004-optimistic-lock-columns.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/005-backfill-published-course-snapshots.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/006-course-review-audit.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/007-module-item-status.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/008-course-pricing.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/009-course-published-version-pointer.sql" relativeToChangelogFile="false"/>
+</databaseChangeLog>

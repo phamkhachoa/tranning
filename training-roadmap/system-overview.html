@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>System Overview - CourseFlow Mini</title>
+  <link rel="stylesheet" href="assets/roadmap.css" />
+  <script defer src="assets/mermaid-init.js"></script>
+</head>
+<body class="overview-page">
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="index.html">Tổng quan</a>
+      <a class="active" href="system-overview.html">System Overview</a>
+      <a href="api-contract.html">API Contract</a>
+      <a href="auth-flow.html">Auth Flow</a>
+      <a href="db-design-guide.html">DB Design</a>
+      <a href="service-todo.html">Service TODO</a>
+      <a href="lessons/day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="lessons/day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="lessons/day-03.html">Ngày 03 - User Admin</a>
+      <a href="lessons/day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="lessons/day-05.html">Ngày 05 - Publish</a>
+      <a href="lessons/day-06.html">Ngày 06 - Enrollment</a>
+      <a href="lessons/day-07.html">Ngày 07 - Progress</a>
+      <a href="lessons/day-08.html">Ngày 08 - Assignment</a>
+      <a href="lessons/day-09.html">Ngày 09 - Quiz</a>
+      <a href="lessons/day-10.html">Ngày 10 - Gradebook</a>
+      <a href="lessons/day-11.html">Ngày 11 - Notification</a>
+      <a href="lessons/day-12.html">Ngày 12 - Chat</a>
+      <a href="lessons/day-13.html">Ngày 13 - Search</a>
+      <a href="lessons/day-14.html">Ngày 14 - Integration QA</a>
+      <a href="lessons/day-15.html">Ngày 15 - Demo Review</a>
+      <a href="lessons/day-16.html">Ngày 16 - Observability</a>
+      <a href="lessons/day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="lessons/day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>CourseFlow Mini - System Overview</h2>
+          <p>
+            Trang này dùng để giải thích toàn bộ hệ thống trước khi giao task. Nhìn theo layer:
+            web và mobile app đăng nhập Keycloak, gateway là trust boundary, service sở hữu data riêng, event/search/chat là phần mở rộng.
+          </p>
+          <div class="meta">
+            <span class="badge">Keycloak</span>
+            <span class="badge">Gateway</span>
+            <span class="badge">Eureka</span>
+            <span class="badge">Service boundaries</span>
+            <span class="badge green">PostgreSQL</span>
+            <span class="badge green">MongoDB</span>
+            <span class="badge green">Elasticsearch</span>
+            <span class="badge green">Debezium</span>
+            <span class="badge green">MinIO</span>
+            <span class="badge green">Prometheus</span>
+            <span class="badge green">Grafana</span>
+            <span class="badge amber">Training scope</span>
+          </div>
+          <div class="overview-strip">
+            <div class="overview-tile">
+              <strong>Auth edge</strong>
+              <span>Keycloak xác thực user từ web/app. Gateway verify token và phát internal JWT training.</span>
+            </div>
+            <div class="overview-tile">
+              <strong>Core domain</strong>
+              <span>User, RBAC, course, enrollment là xương sống cho mọi bài sau.</span>
+            </div>
+            <div class="overview-tile">
+              <strong>Learning runtime</strong>
+              <span>Assignment, quiz, gradebook biến course thành flow học thật.</span>
+            </div>
+            <div class="overview-tile">
+              <strong>Platform services</strong>
+              <span>Media-service, MinIO, Debezium, discovery-service và observability stack có sẵn để học viên dùng và quan sát.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>1. Bản đồ kiến trúc tổng quan</h2>
+          <div class="diagram-scroll large">
+            <div class="mermaid">
+flowchart LR
+  %% ===== Clients =====
+  subgraph C["Client Layer"]
+    direction TB
+    Admin["React Admin<br/>operator + instructor"]
+    Learn["Next Learner<br/>student portal"]
+    App["Mobile App<br/>Flutter / React Native"]
+  end
+
+  %% ===== Auth boundary =====
+  subgraph E["Edge + Identity Boundary"]
+    direction TB
+    KC["Keycloak<br/>OIDC Authorization Code + PKCE"]
+    DS["discovery-service<br/>Eureka registry"]
+    GW["API Gateway<br/>route, CORS, verify JWT, trusted headers"]
+    IJ["Internal JWT<br/>local signing in training"]
+  end
+
+  %% ===== Core =====
+  subgraph CORE["Core Domain"]
+    direction TB
+    UM["user-management-service<br/>profile, directory, status"]
+    AC["access-control-service<br/>roles, permissions, audit"]
+    CS["course-service<br/>course CRUD, catalog, publish"]
+    EN["enrollment-service<br/>enrollments, progress"]
+  end
+
+  %% ===== Learning =====
+  subgraph LEARN["Learning + Assessment"]
+    direction TB
+    AS["assignment-service<br/>submission, feedback"]
+    QS["quiz-service<br/>attempt, auto scoring"]
+    GB["gradebook-service<br/>score aggregation, privacy"]
+  end
+
+  %% ===== Engagement =====
+  subgraph EXP["Engagement + Read Models"]
+    direction TB
+    OB["outbox-relay<br/>event dispatch"]
+    NO["notification-service<br/>inbox, mark read"]
+    MS["media-service<br/>signed URL, video readiness"]
+    DBZ["Debezium + Kafka Connect<br/>course table CDC"]
+    CH["chat-service<br/>course room, STOMP, history"]
+    SE["search-service<br/>search, suggest, recommend-lite"]
+    PR["Prometheus + Grafana<br/>metrics, dashboard, alerts"]
+  end
+
+  %% ===== Stores =====
+  subgraph DATA["Data Stores"]
+    direction TB
+    PG[("PostgreSQL<br/>schema per service")]
+    MG[("MongoDB<br/>chat messages")]
+    ES[("Elasticsearch<br/>course documents")]
+  KF[("Kafka<br/>training event bus")]
+    RD[("Redis<br/>optional cache")]
+    S3[("MinIO<br/>media + submission files")]
+  end
+
+  C --> KC
+  KC --> C
+  C --> GW
+  GW --> IJ
+  DS -. register/observe .-> GW
+  DS -. register/observe .-> MS
+  IJ --> CORE
+  IJ --> LEARN
+  IJ --> EXP
+
+  GW --> UM
+  GW --> AC
+  GW --> CS
+  GW --> EN
+  GW --> AS
+  GW --> QS
+  GW --> GB
+  GW --> MS
+  GW --> NO
+  GW --> SE
+  GW -. websocket .-> CH
+
+  CS --> AC
+  CS --> MS
+  EN --> CS
+  AS --> EN
+  QS --> GB
+  AS --> GB
+  EN --> OB
+  GB --> OB
+  OB --> KF
+  KF --> NO
+  CS -. table changes .-> DBZ
+  DBZ --> KF
+  KF --> SE
+  MS --> S3
+  MS --> PG
+  CH --> MG
+  SE --> ES
+  CORE --> PG
+  LEARN --> PG
+  NO --> PG
+  GW -. optional .-> RD
+  AS -. submission attachments .-> S3
+  PR -. scrape .-> GW
+  PR -. scrape .-> UM
+  PR -. scrape .-> AC
+  PR -. scrape .-> CS
+  PR -. scrape .-> EN
+  PR -. scrape .-> AS
+  PR -. scrape .-> QS
+  PR -. scrape .-> GB
+  PR -. scrape .-> NO
+  PR -. scrape .-> CH
+  PR -. scrape .-> SE
+
+  classDef client fill:#e8f0ff,stroke:#1d4ed8,color:#172033,stroke-width:1px;
+  classDef edge fill:#f1ebff,stroke:#6d28d9,color:#172033,stroke-width:1px;
+  classDef core fill:#e7f7ef,stroke:#047857,color:#172033,stroke-width:1px;
+  classDef learn fill:#fff4df,stroke:#b45309,color:#172033,stroke-width:1px;
+  classDef data fill:#eef2f7,stroke:#475569,color:#172033,stroke-width:1px;
+  class Admin,Learn,App client;
+  class KC,DS,GW,IJ edge;
+  class UM,AC,CS,EN core;
+  class AS,QS,GB,OB,NO,MS,DBZ,CH,SE,PR learn;
+  class PG,MG,ES,KF,RD,S3 data;
+            </div>
+          </div>
+          <div class="legend-row">
+            <span class="legend-pill"><span class="legend-dot"></span>Client</span>
+            <span class="legend-pill"><span class="legend-dot violet"></span>Auth edge</span>
+            <span class="legend-pill"><span class="legend-dot green"></span>Core domain</span>
+            <span class="legend-pill"><span class="legend-dot amber"></span>Runtime/read model</span>
+          </div>
+          <p class="diagram-note">Rule chính: web/app chỉ gọi API Gateway, không gọi service trực tiếp; service không query database của service khác.</p>
+        </section>
+
+        <section class="panel">
+          <h2>2. Luồng request protected</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant W as Web/App Client
+  participant KC as Keycloak
+  participant GW as Gateway
+  participant S as Domain Service
+  participant AC as Access Control
+  participant DB as Service DB
+
+  U->>W: Login
+  W->>KC: Authorization Code + PKCE
+  KC-->>W: Access token
+  W->>GW: Same API request + Bearer token
+  GW->>GW: Verify issuer, audience, JWKS
+  GW->>GW: Strip forged X-User-* headers
+  GW->>GW: Mint local internal JWT
+  GW->>S: Internal JWT + trusted X-User-*
+  S->>S: Build CurrentUser
+  S->>AC: Permission/resource decision
+  AC-->>S: allow/deny + audit
+  S->>DB: Read/write owned data
+  S-->>GW: Response
+  GW-->>W: Response
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>3. Flow nghiệp vụ demo cuối khóa</h2>
+          <div class="diagram-scroll large">
+            <div class="mermaid">
+flowchart LR
+  subgraph Authoring["Instructor/Admin"]
+    A1["Create course draft"]
+    A2["Submit review"]
+    A3["Publish course"]
+  end
+
+  subgraph Discovery["Learner discovery"]
+    D1["Search / catalog"]
+    D2["View detail"]
+    D3["Enroll course"]
+  end
+
+  subgraph Runtime["Learning runtime"]
+    R1["Complete lesson"]
+    R2["Submit assignment"]
+    R3["Take quiz"]
+  end
+
+  subgraph Outcome["Outcome"]
+    O1["Gradebook aggregation"]
+    O2["Notification"]
+    O3["Demo evidence"]
+  end
+
+  A1 --> A2 --> A3 --> D1 --> D2 --> D3 --> R1
+  R1 --> R2 --> O1
+  R1 --> R3 --> O1
+  D3 -. EnrollmentCreated .-> O2
+  O1 -. GradeUpdated .-> O2
+  O2 --> O3
+  O1 --> O3
+
+  classDef author fill:#f1ebff,stroke:#6d28d9,color:#172033;
+  classDef discover fill:#e8f0ff,stroke:#1d4ed8,color:#172033;
+  classDef runtime fill:#fff4df,stroke:#b45309,color:#172033;
+  classDef outcome fill:#e7f7ef,stroke:#047857,color:#172033;
+  class A1,A2,A3 author;
+  class D1,D2,D3 discover;
+  class R1,R2,R3 runtime;
+  class O1,O2,O3 outcome;
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>4. Data ownership và integration</h2>
+          <div class="diagram-scroll large">
+            <div class="mermaid">
+flowchart TB
+  subgraph Owned["Service-owned storage"]
+    UMDB[("user_management<br/>profiles, status")]
+    ACDB[("access_control<br/>roles, permissions, audit")]
+    CDB[("course<br/>course, lesson, publish history")]
+    EDB[("enrollment<br/>enrollment, progress")]
+    ADB[("assignment<br/>assignment, submission")]
+    QDB[("quiz<br/>quiz, attempt")]
+    GDB[("gradebook<br/>grade items, final result")]
+    NDB[("notification<br/>inbox")]
+    MDB[("MongoDB<br/>chat messages")]
+    KDBZ["Debezium CDC<br/>course table changes"]
+    KTOPIC[("Kafka topic<br/>courseflow.course.public.courses")]
+    XDB[("Elasticsearch<br/>search documents")]
+  end
+
+  subgraph Integration["Allowed integration style"]
+    API["Synchronous API<br/>when caller needs result now"]
+    EVT["Outbox/Event<br/>when side effect can be async"]
+    CDC["CDC projection<br/>when read model follows DB changes"]
+    READ["Read model<br/>when query/search must be fast"]
+  end
+
+  UMDB --> API
+  ACDB --> API
+  CDB --> API
+  EDB --> API
+  ADB --> EVT
+  QDB --> EVT
+  GDB --> EVT
+  NDB --> API
+  MDB --> API
+  CDB --> CDC
+  CDC --> KDBZ
+  KDBZ --> KTOPIC
+  KTOPIC --> READ
+  READ --> XDB
+  EVT --> NDB
+
+  classDef store fill:#eef2f7,stroke:#475569,color:#172033;
+  classDef api fill:#e8f0ff,stroke:#1d4ed8,color:#172033;
+  classDef event fill:#fff4df,stroke:#b45309,color:#172033;
+  classDef read fill:#e7f7ef,stroke:#047857,color:#172033;
+  class UMDB,ACDB,CDB,EDB,ADB,QDB,GDB,NDB,MDB,KDBZ,KTOPIC,XDB store;
+  class API api;
+  class EVT event;
+  class CDC,READ read;
+            </div>
+          </div>
+          <p class="diagram-note">Nếu cần dữ liệu service khác: gọi API, phát event, hoặc dựng read model qua CDC. Không join chéo database, không polling bảng của service khác.</p>
+        </section>
+
+        <section class="panel">
+          <h2>5. Mapping ngày học vào hệ thống</h2>
+          <div class="diagram-scroll large">
+            <div class="mermaid">
+timeline
+  title CourseFlow Mini training map
+  Day 01 : Keycloak login : current user : profile baseline
+  Day 02 : RBAC : protected admin API : audit decision
+  Day 03 : User admin : directory : status
+  Day 04-05 : Course CRUD : publish workflow : catalog
+  Day 06-07 : Enrollment : progress : next action
+  Day 08-10 : Assignment : quiz : gradebook
+  Day 11-13 : Notification/outbox : chat : Debezium search/recommend
+  Day 14-15 : Integration QA : demo review : backlog
+  Day 16-18 : Observability : cache/rate-limit/resilience : API contract/release
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

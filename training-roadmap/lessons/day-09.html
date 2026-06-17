@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 09 - Quiz attempt và auto scoring</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a class="active" href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 09: Quiz attempt và auto scoring</h2>
+          <p>Instructor tạo quiz, learner làm attempt, hệ thống chấm điểm tự động.</p>
+          <div class="meta">
+            <span class="badge">Quiz</span>
+            <span class="badge">Attempt</span>
+            <span class="badge">Auto Scoring</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Instructor["Instructor<br/>Admin web"] --> Author["create quiz/questions/options"]
+  Author --> QuizDB[("quiz DB")]
+  Learner["Learner web"] --> Start["start attempt"]
+  MobileApp["Mobile app"] --> Start
+  Start --> SafePayload["questions + options<br/>no correct answer"]
+  SafePayload --> Attempt[("attempt STARTED")]
+  Learner --> Submit["submit answers"]
+  MobileApp --> Submit
+  Submit --> Score["auto scoring"]
+  Score --> Result["score + passed + safe breakdown"]
+  Result --> AttemptSubmitted[("attempt SUBMITTED")]
+  Submit -->|already submitted| Conflict["409"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Instructor tạo quiz với single choice/multiple choice.</li>
+            <li>Learner start attempt không thấy đáp án đúng.</li>
+            <li>Submit attempt trả score và passed flag.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Đọc quiz-service: quiz, questions, options, attempts, answers, readiness endpoint cho course publish.</li>
+            <li>Chốt quiz lifecycle: DRAFT -> PUBLISHED/ACTIVE -> ARCHIVED; course-service chỉ publish item quiz khi quiz readiness PUBLISHED/ACTIVE.</li>
+            <li>Instructor create quiz: check course staff, validate title, timeLimit, maxAttempts, passScore nếu có.</li>
+            <li>Question CRUD: hỗ trợ tối thiểu SINGLE_CHOICE/MULTIPLE_CHOICE; question text không rỗng, point > 0, ít nhất một correct option.</li>
+            <li>Public learner view không được leak correct answer/explanation trước submit; admin view được thấy đáp án.</li>
+            <li>Start attempt: check learner access/enrollment, quiz published, attempts còn lại, tạo attempt status IN_PROGRESS với startedAt.</li>
+            <li>Submit attempt: validate attempt thuộc current user, status IN_PROGRESS, chưa hết time limit nếu rule bật.</li>
+            <li>Scoring: single choice đúng full point; multiple choice có rule rõ full-match hoặc partial; normalize score scale và rounding.</li>
+            <li>Sau submit, set status SUBMITTED/GRADED, submittedAt, score; answer detail lưu đủ để review nhưng learner chỉ thấy correct answers nếu reveal policy cho phép.</li>
+            <li>Idempotency: submit lại attempt đã graded trả result cũ hoặc 409 theo rule, không double score.</li>
+            <li>Emit grade event hoặc expose gradebook source endpoint để ngày 10 lấy điểm quiz.</li>
+            <li>Evidence bắt buộc: instructor publish quiz, learner start/submit, score đúng, correct answer không leak trước submit, student2 không xem attempt student1.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Quiz published mới cho learner làm.</li>
+            <li>Attempt không submit lại nếu rule không cho phép.</li>
+            <li>Score đúng với bộ answer mẫu.</li>
+            <li>Nested validation trả lỗi rõ khi input sai.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>POST /api/v1/quizzes/{quizId}/attempts
+Authorization: Bearer &lt;student_token&gt;
+Expected: attempt STARTED, không có correctAnswer
+
+POST /api/v1/quizzes/attempts/{attemptId}/submit
+Body: {"answers":[...]}
+Expected: score, passed, breakdown an toàn
+
+Negative:
+- submit attempt đã SUBMITTED -&gt; 409
+- response start attempt leak đáp án -&gt; fail review</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-08.html">Ngày 08 - Assignment</a>
+          <a href="day-10.html">Ngày 10 - Gradebook</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

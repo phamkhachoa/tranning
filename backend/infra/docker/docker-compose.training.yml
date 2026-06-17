@@ -1,0 +1,441 @@
+name: courseflow-training
+
+x-build-common: &build-common
+  context: ../..
+  dockerfile: infra/docker/service.Dockerfile
+
+x-service-env: &service-env
+  SERVER_PORT: 8080
+  COURSEFLOW_TRAINING_AUTH_BYPASS: ${COURSEFLOW_TRAINING_AUTH_BYPASS:-false}
+  COURSEFLOW_CHAT_TRAINING_AUTH_ENABLED: ${COURSEFLOW_CHAT_TRAINING_AUTH_ENABLED:-true}
+  COURSEFLOW_INTERNAL_JWT_ALGORITHM: HS256
+  COURSEFLOW_INTERNAL_JWT_SECRET: courseflow-training-internal-jwt-secret-32bytes
+  COURSEFLOW_INTERNAL_SERVICE_TOKEN_MODE: local
+  COURSEFLOW_INTERNAL_JWT_AUDIENCE: courseflow-services
+  TOKEN_CONVERTER_MODE: ${TOKEN_CONVERTER_MODE:-local}
+  KEYCLOAK_BASE_URL: ${KEYCLOAK_BASE_URL:-http://keycloak:8080}
+  KEYCLOAK_REALM: ${KEYCLOAK_REALM:-courseflow}
+  KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI:-http://localhost:18080/realms/courseflow}
+  KEYCLOAK_JWK_SET_URI: ${KEYCLOAK_JWK_SET_URI:-http://keycloak:8080/realms/courseflow/protocol/openid-connect/certs}
+  KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-courseflow-api}
+  KEYCLOAK_ADMIN_CLIENT_ID: ${KEYCLOAK_ADMIN_CLIENT_ID:-keycloak-user-lifecycle}
+  KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET:-local-keycloak-user-lifecycle-secret-change-me}
+  KEYCLOAK_SETUP_EMAIL_CLIENT_ID: ${KEYCLOAK_SETUP_EMAIL_CLIENT_ID:-courseflow-admin-web}
+  KEYCLOAK_SETUP_EMAIL_REDIRECT_URI: ${KEYCLOAK_SETUP_EMAIL_REDIRECT_URI:-http://localhost:5173/login}
+  SPRING_LIQUIBASE_CONTEXTS: prod,demo
+  KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+  REDIS_HOST: redis
+  ELASTICSEARCH_URIS: http://elasticsearch:9200
+  CHAT_MONGO_URI: mongodb://mongo:27017/cf_chat
+  SERVICE_DISCOVERY_ENABLED: ${SERVICE_DISCOVERY_ENABLED:-true}
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8080/eureka/
+  STORAGE_PROVIDER: minio
+  STORAGE_ENDPOINT: http://minio:9000
+  STORAGE_EXTERNAL_ENDPOINT: http://localhost:9000
+  STORAGE_ACCESS_KEY: courseflow
+  STORAGE_SECRET_KEY: courseflow
+  STORAGE_ALLOW_DEMO_CREDENTIALS: "true"
+  ACCESS_CONTROL_DB_URL: jdbc:postgresql://postgres:5432/cf_access_control
+  USER_MANAGEMENT_DB_URL: jdbc:postgresql://postgres:5432/cf_user_management
+  COURSE_DB_URL: jdbc:postgresql://postgres:5432/cf_course
+  ENROLLMENT_DB_URL: jdbc:postgresql://postgres:5432/cf_enrollment
+  ASSIGNMENT_DB_URL: jdbc:postgresql://postgres:5432/cf_assignment
+  MEDIA_DB_URL: jdbc:postgresql://postgres:5432/cf_media
+  NOTIFICATION_DB_URL: jdbc:postgresql://postgres:5432/cf_notification
+  GRADEBOOK_DB_URL: jdbc:postgresql://postgres:5432/cf_gradebook
+  QUIZ_DB_URL: jdbc:postgresql://postgres:5432/cf_quiz
+  OUTBOX_RELAY_DB_URL: jdbc:postgresql://postgres:5432/cf_outbox
+  ACCESS_CONTROL_DB_USERNAME: courseflow
+  ACCESS_CONTROL_DB_PASSWORD: courseflow
+  USER_MANAGEMENT_DB_USERNAME: courseflow
+  USER_MANAGEMENT_DB_PASSWORD: courseflow
+  COURSE_DB_USERNAME: courseflow
+  COURSE_DB_PASSWORD: courseflow
+  ENROLLMENT_DB_USERNAME: courseflow
+  ENROLLMENT_DB_PASSWORD: courseflow
+  ASSIGNMENT_DB_USERNAME: courseflow
+  ASSIGNMENT_DB_PASSWORD: courseflow
+  MEDIA_DB_USERNAME: courseflow
+  MEDIA_DB_PASSWORD: courseflow
+  NOTIFICATION_DB_USERNAME: courseflow
+  NOTIFICATION_DB_PASSWORD: courseflow
+  GRADEBOOK_DB_USERNAME: courseflow
+  GRADEBOOK_DB_PASSWORD: courseflow
+  QUIZ_DB_USERNAME: courseflow
+  QUIZ_DB_PASSWORD: courseflow
+  OUTBOX_RELAY_DB_USERNAME: courseflow
+  OUTBOX_RELAY_DB_PASSWORD: courseflow
+  USER_MANAGEMENT_SERVICE_URI: http://user-management-service:8080
+  ACCESS_CONTROL_SERVICE_URI: http://access-control-service:8080
+  COURSE_SERVICE_URI: http://course-service:8080
+  COURSE_SERVICE_URL: http://course-service:8080
+  ENROLLMENT_SERVICE_URI: http://enrollment-service:8080
+  ENROLLMENT_SERVICE_URL: http://enrollment-service:8080
+  ASSIGNMENT_SERVICE_URI: http://assignment-service:8080
+  ASSIGNMENT_SERVICE_URL: http://assignment-service:8080
+  MEDIA_SERVICE_URI: http://media-service:8080
+  MEDIA_SERVICE_URL: http://media-service:8080
+  CHAT_SERVICE_URI: http://chat-service:8080
+  CHAT_SERVICE_WS_URI: ws://chat-service:8080
+  QUIZ_SERVICE_URI: http://quiz-service:8080
+  GRADEBOOK_SERVICE_URI: http://gradebook-service:8080
+  NOTIFICATION_SERVICE_URI: http://notification-service:8080
+  SEARCH_SERVICE_URI: http://search-service:8080
+  OUTBOX_RELAY_SERVICE_URI: http://outbox-relay:8080
+
+x-service-common: &service-common
+  restart: unless-stopped
+  expose:
+    - "8080"
+  environment:
+    <<: *service-env
+  depends_on:
+    postgres:
+      condition: service_healthy
+    kafka:
+      condition: service_started
+    redis:
+      condition: service_started
+    mongo:
+      condition: service_started
+    keycloak:
+      condition: service_started
+    discovery-service:
+      condition: service_started
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: courseflow-training-postgres
+    command:
+      - "postgres"
+      - "-c"
+      - "wal_level=logical"
+      - "-c"
+      - "max_replication_slots=10"
+      - "-c"
+      - "max_wal_senders=10"
+    environment:
+      POSTGRES_USER: courseflow
+      POSTGRES_PASSWORD: courseflow
+      POSTGRES_DB: courseflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - training_postgres_data:/var/lib/postgresql/data
+      - ./postgres_init.sql:/docker-entrypoint-initdb.d/001-courseflow-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U courseflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: courseflow-training-redis
+    ports:
+      - "6379:6379"
+
+  mongo:
+    image: mongo:7
+    container_name: courseflow-training-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - training_mongo_data:/data/db
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.1
+    container_name: courseflow-training-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.7.1
+    container_name: courseflow-training-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  kafka-connect:
+    image: debezium/connect:2.7.3.Final
+    container_name: courseflow-training-kafka-connect
+    depends_on:
+      - kafka
+      - postgres
+    ports:
+      - "18083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: courseflow-training-connect
+      CONFIG_STORAGE_TOPIC: courseflow_training_connect_configs
+      OFFSET_STORAGE_TOPIC: courseflow_training_connect_offsets
+      STATUS_STORAGE_TOPIC: courseflow_training_connect_status
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: courseflow-training-elasticsearch
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - training_elasticsearch_data:/usr/share/elasticsearch/data
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0
+    container_name: courseflow-training-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_BASE_URL:-http://localhost:18080}
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./keycloak/courseflow-realm.json:/opt/keycloak/data/import/courseflow-realm.json:ro
+
+  minio:
+    image: minio/minio:RELEASE.2024-10-13T13-34-11Z
+    container_name: courseflow-training-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: courseflow
+      MINIO_ROOT_PASSWORD: courseflow
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - training_minio_data:/data
+
+  minio-setup:
+    image: minio/mc:RELEASE.2024-10-08T09-37-26Z
+    container_name: courseflow-training-minio-setup
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 courseflow courseflow; do
+        echo 'waiting for minio...'; sleep 2;
+      done &&
+      mc mb --ignore-existing local/courseflow-media &&
+      mc mb --ignore-existing local/courseflow-submissions &&
+      echo 'MinIO buckets ready: courseflow-media, courseflow-submissions'
+      "
+    restart: "no"
+
+  discovery-service:
+    restart: unless-stopped
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/discovery-service
+    environment:
+      SERVER_PORT: 8080
+      EUREKA_SELF_PRESERVATION_ENABLED: "false"
+    ports:
+      - "8761:8080"
+
+  api-gateway:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/api-gateway
+    ports:
+      - "28080:8080"
+
+  user-management-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/user-management-service
+
+  access-control-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/access-control-service
+
+  course-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/course-service
+
+  debezium-course-search-setup:
+    image: curlimages/curl:8.10.1
+    container_name: courseflow-training-debezium-course-search-setup
+    depends_on:
+      kafka-connect:
+        condition: service_started
+      course-service:
+        condition: service_started
+    volumes:
+      - ./debezium/course-search-cdc-connector-config.json:/connector-config.json:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >
+        until curl -fsS http://kafka-connect:8083/connectors >/dev/null; do
+          echo 'waiting for kafka-connect...'; sleep 2;
+        done &&
+        until curl -fsS http://course-service:8080/actuator/health >/dev/null; do
+          echo 'waiting for course-service migrations...'; sleep 2;
+        done &&
+        curl -fsS -X PUT -H 'Content-Type: application/json' --data @/connector-config.json http://kafka-connect:8083/connectors/courseflow-course-search-cdc/config &&
+        echo 'Debezium connector ready: courseflow-course-search-cdc'
+    restart: "no"
+
+  enrollment-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/enrollment-service
+
+  assignment-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/assignment-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      minio-setup:
+        condition: service_completed_successfully
+
+  media-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/media-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      discovery-service:
+        condition: service_started
+      minio-setup:
+        condition: service_completed_successfully
+
+  chat-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/chat-service
+
+  quiz-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/quiz-service
+
+  gradebook-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/gradebook-service
+
+  notification-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/notification-service
+
+  search-service:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/search-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      elasticsearch:
+        condition: service_started
+      debezium-course-search-setup:
+        condition: service_completed_successfully
+
+  outbox-relay:
+    <<: *service-common
+    build:
+      <<: *build-common
+      args:
+        MODULE: services/outbox-relay
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: courseflow-training-prometheus
+    profiles: ["observability"]
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ../observability/prometheus-training.yml:/etc/prometheus/prometheus.yml:ro
+      - ../observability/alerts-training.yml:/etc/prometheus/alerts.yml:ro
+      - training_prometheus_data:/prometheus
+    ports:
+      - "19090:9090"
+    depends_on:
+      - api-gateway
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: courseflow-training-grafana
+    profiles: ["observability"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - training_grafana_data:/var/lib/grafana
+      - ../observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "13000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  training_postgres_data:
+  training_mongo_data:
+  training_elasticsearch_data:
+  training_minio_data:
+  training_prometheus_data:
+  training_grafana_data:

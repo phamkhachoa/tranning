@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 16 - Observability</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a class="active" href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 16: Observability</h2>
+          <p>Biết service đang sống hay chết, request lỗi ở đâu, và metric nào chứng minh hệ thống ổn.</p>
+          <div class="meta">
+            <span class="badge">Actuator</span>
+            <span class="badge">Prometheus</span>
+            <span class="badge">Grafana</span>
+            <span class="badge">Correlation ID</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Client["Web/App"] --> GW["API Gateway<br/>X-Correlation-Id"]
+  GW --> Svc["Domain services<br/>actuator/prometheus"]
+  Svc --> Logs["Structured logs<br/>correlationId"]
+  Prom["Prometheus"] -->|scrape| GW
+  Prom -->|scrape| Svc
+  Grafana["Grafana"] --> Prom
+  Alert["Alert rules"] --> Prom
+  Debug["Debug one failing request"] --> Logs
+  Debug --> Grafana
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Chạy Prometheus/Grafana bằng profile observability của training compose.</li>
+            <li>Đọc được <code>/actuator/health</code> và <code>/actuator/prometheus</code> của gateway/service.</li>
+            <li>Truy một request bằng <code>X-Correlation-Id</code> từ gateway sang service log.</li>
+            <li>Biết viết một alert đơn giản cho service down hoặc HTTP 5xx tăng cao.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Start stack có observability: <code>docker compose -f docker-compose.training.yml --profile observability up -d --build</code>.</li>
+            <li>Mở Prometheus <code>http://localhost:19090/targets</code>, xác nhận gateway và các service có state UP.</li>
+            <li>Mở Grafana <code>http://localhost:13000</code> với <code>admin/admin</code>, kiểm tra datasource Prometheus.</li>
+            <li>Đọc <code>backend/infra/observability/prometheus-training.yml</code>: job nào scrape gateway, job nào scrape service.</li>
+            <li>Đọc <code>CorrelationIdGatewayFilter</code>: gateway tạo hoặc forward <code>X-Correlation-Id</code>.</li>
+            <li>Đọc <code>CorrelationIdFilter</code> trong common-library: service đưa correlationId vào MDC để log dễ tìm.</li>
+            <li>Gọi một API có header <code>X-Correlation-Id: training-day-16-001</code>, sau đó grep log gateway và service theo id này.</li>
+            <li>Đọc <code>ApiExceptionHandler</code>: lỗi phải có error shape thống nhất, không trả stack trace ra client.</li>
+            <li>Thêm metric hoặc counter nhỏ nếu cần: số request bị reject do auth, số outbox publish fail, số search projection fail.</li>
+            <li>Viết một alert training: service scrape down trong 2 phút hoặc HTTP server 5xx rate tăng.</li>
+            <li>Không gắn label có cardinality cao như userId, email, token, full URL query vào metric.</li>
+            <li>Evidence phải có ảnh/response Prometheus target UP, query metric, một log có correlationId, và một alert rule đọc được.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Prometheus thấy đủ target chính.</li>
+            <li>Grafana đọc được datasource Prometheus.</li>
+            <li>Một request lỗi có thể truy từ response correlation id sang log.</li>
+            <li>Giải thích được khác nhau giữa health check, metric và log.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>cd backend/infra/docker
+docker compose -f docker-compose.training.yml --profile observability up -d --build
+
+GET http://localhost:19090/targets
+Expected: api-gateway và courseflow-services UP
+
+curl -H "X-Correlation-Id: training-day-16-001" \
+  http://localhost:28080/api/v1/courses
+
+docker logs courseflow-training-api-gateway | grep training-day-16-001
+docker logs courseflow-training-course-service | grep training-day-16-001
+
+Prometheus query:
+up{job=~"courseflow-.*"}
+http_server_requests_seconds_count</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-15.html">Ngày 15 - Demo Review</a>
+          <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

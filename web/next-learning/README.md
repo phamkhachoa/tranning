@@ -1,0 +1,50 @@
+# CourseFlow Next Learning
+
+Next.js is used for learner-facing and public pages where SEO, shareability or server rendering matters.
+
+## Use Cases
+
+- Public course catalog and course detail pages.
+- SEO-friendly course articles/syllabi.
+- Certificate verification pages.
+- Authenticated learner dashboard when SSR/streaming improves perceived performance.
+
+## Feature Layout
+
+```text
+app/                       Next.js app routes
+features/
+  course-catalog/          public discovery, filters, search facets
+  course-detail/           syllabus, outcomes, enrollment CTA
+  certificates/            public certificate verification
+shared/
+  api/                     BFF API client
+  ui/                      reusable learner UI
+```
+
+Primary backend entrypoint: `api-gateway`.
+
+Use `COURSEFLOW_API_URL=http://localhost:28080/api` and
+`NEXT_PUBLIC_API_URL=http://localhost:28080/api` for the default local backend cluster. The learner
+source already adds `/v1/...` paths.
+
+## Keycloak Login
+
+The learner app uses Authorization Code + PKCE against the CourseFlow Keycloak realm:
+
+```bash
+NEXT_PUBLIC_KEYCLOAK_ISSUER_URI=http://localhost:18080/realms/courseflow
+NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=courseflow-learner-web
+```
+
+The Keycloak access token is stored for gateway calls and refreshed through the Keycloak token
+endpoint.
+
+Training demo accounts:
+
+| Email | Password | Role |
+| --- | --- | --- |
+| `student@courseflow.local` | `password` | `STUDENT` |
+| `student2@courseflow.local` | `password` | `STUDENT` |
+
+Run the backend training stack first, then open `http://localhost:3000/login`.

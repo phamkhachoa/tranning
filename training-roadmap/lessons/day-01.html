@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 01 - Keycloak login và current user</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a class="active" href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 01: Keycloak login và current user</h2>
+          <p>Hoàn thiện đường đi tối thiểu: web/app login Keycloak -> gateway verify token -> user-management trả current user.</p>
+          <div class="meta">
+            <span class="badge">Keycloak</span>
+            <span class="badge">Gateway</span>
+            <span class="badge">User Profile</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  subgraph Client["Client"]
+    Admin["React Admin"]
+    Learner["Next Learner"]
+    Mobile["Mobile App"]
+  end
+  subgraph Auth["Auth Edge"]
+    KC["Keycloak<br/>OIDC + PKCE"]
+    GW["API Gateway<br/>verify JWT + strip forged headers"]
+  end
+  subgraph User["User Management"]
+    Current["GET /internal/users/me"]
+    ProfileDB[("profile tables")]
+  end
+  Admin --> KC
+  Learner --> KC
+  Mobile --> KC
+  KC -->|access token| GW
+  GW -->|internal JWT + X-User-*| Current
+  Current --> ProfileDB
+  Current -->|id, email, role, status| GW
+  GW --> Admin
+  GW --> Learner
+  GW --> Mobile
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Login được admin web, learner web và mobile app client bằng tài khoản Keycloak demo.</li>
+            <li>Giải thích được khác nhau giữa JWT ký bằng shared secret và OIDC token verify bằng JWKS/public key.</li>
+            <li>Gọi được <code>GET /api/v1/users/me</code> qua gateway.</li>
+            <li>Gateway set đúng <code>X-User-Id</code>, <code>X-User-Roles</code>, <code>X-Internal-Authorization</code>.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Trọng tâm auth của ngày 01</h2>
+          <p>
+            Bài này không dừng ở verify JWT bằng secret key. Học viên phải hiểu gateway đang verify
+            access token Keycloak bằng <code>JWKS/public key</code>, sau đó mới mint internal JWT local
+            cho downstream service.
+          </p>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Client["Web/App<br/>Bearer Keycloak token"] --> GW["API Gateway"]
+  GW --> JWKS["Keycloak JWKS<br/>public keys"]
+  GW --> Validate["Validate signature<br/>issuer + audience + exp + sub"]
+  Validate --> Internal["Mint internal JWT<br/>HS256 training secret"]
+  Internal --> Service["Downstream service<br/>CurrentUser"]
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Token</th>
+                <th>Ai ký?</th>
+                <th>Gateway/service verify bằng gì?</th>
+                <th>Dùng ở đâu?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Keycloak access token</td>
+                <td>Keycloak private key</td>
+                <td>JWKS/public key, issuer, audience</td>
+                <td>Client -> API Gateway</td>
+              </tr>
+              <tr>
+                <td>Internal JWT</td>
+                <td>Gateway trong mini stack</td>
+                <td>HS256 shared internal secret</td>
+                <td>Gateway -> downstream service</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout">
+            Đọc chi tiết trước khi làm bài: <a href="../auth-flow.html">Auth Flow</a>, phần
+            <strong>Từ JWT secret sang OAuth2/OIDC JWKS</strong>.
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Chạy stack bằng <code>docker compose -f docker-compose.training.yml up -d --build</code>; kiểm tra <code>keycloak</code>, <code>api-gateway</code>, <code>user-management-service</code> đều healthy trước khi viết code.</li>
+            <li>Mở Keycloak admin console <code>http://localhost:18080</code>, xác nhận realm <code>courseflow</code>, client <code>courseflow-api</code>, users demo <code>admin/instructor/student/student2</code> đã được import.</li>
+            <li>Mở <code>http://localhost:18080/realms/courseflow/.well-known/openid-configuration</code> và chỉ ra <code>issuer</code>, <code>jwks_uri</code>. Mở tiếp <code>/protocol/openid-connect/certs</code> để thấy danh sách public keys.</li>
+            <li>Đọc <code>ConfiguredGatewayExternalTokenVerifier</code>: xác định gateway dùng <code>NimbusReactiveJwtDecoder.withJwkSetUri</code>, không verify Keycloak token bằng shared secret.</li>
+            <li>Đọc <code>OAuth2AudienceValidator</code>: giải thích vì sao token ký đúng nhưng sai <code>aud</code> vẫn phải bị reject.</li>
+            <li>Đăng nhập web/app hoặc lấy token bằng flow dev; mọi request chính đi qua gateway với <code>Authorization: Bearer &lt;access_token&gt;</code>, không gọi service trực tiếp từ web/app.</li>
+            <li>Đọc <code>JwtAuthenticationGatewayFilter</code>: xác định các bước verify issuer, audience, JWKS, strip header giả mạo, map identity demo và mint internal JWT local.</li>
+            <li>Đọc route <code>user-management-current-user</code> trong gateway để hiểu <code>/api/v1/users/me</code> rewrite thành endpoint nội bộ của user-management-service.</li>
+            <li>Trong <code>user-management-service</code>, đọc controller current user/profile, DTO profile và entity user/profile tương ứng; chỉ để controller parse request và gọi service layer.</li>
+            <li>Đảm bảo current user được dựng từ trusted headers/internal JWT qua <code>CurrentUser</code>; không nhận <code>userId</code> từ request body cho API của chính user hiện tại.</li>
+            <li>Implement hoặc hoàn thiện <code>GET /api/v1/users/me</code>: trả id, email, displayName, avatarUrl, bio, role/roles, status; không trả password, internal token hoặc field audit nhạy cảm.</li>
+            <li>Implement hoặc hoàn thiện <code>PUT /api/v1/users/me/profile</code>: validate displayName không rỗng, avatarUrl hợp lệ nếu có, bio giới hạn độ dài; update đúng user đang login.</li>
+            <li>Nếu cần DB change, thêm Liquibase migration nhỏ vào user-management-service, ví dụ thêm <code>bio</code> hoặc <code>avatar_url</code>; đặt default/nullability rõ ràng.</li>
+            <li>Xử lý lỗi: thiếu token trả 401 ở gateway, token sai audience/issuer trả 401, user DISABLED trả 403 hoặc response status rõ theo rule service.</li>
+            <li>Evidence bắt buộc: login bằng student gọi <code>/api/v1/users/me</code>, update profile rồi read-back; gọi không token để thấy 401; dùng token admin để thấy role khác student.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Admin web login bằng <code>admin@courseflow.local/password</code>.</li>
+            <li>Learner web/mobile app login bằng <code>student@courseflow.local/password</code>.</li>
+            <li><code>/api/v1/users/me</code> trả đúng <code>id</code>, <code>email</code>, <code>role</code>, <code>status</code>.</li>
+            <li>Request không token trả <code>401</code>.</li>
+            <li>Client tự gửi <code>X-User-Id</code> giả không thay đổi identity thật.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>GET http://localhost:28080/api/v1/users/me
+Authorization: Bearer &lt;keycloak_access_token&gt;
+
+Expected:
+- HTTP 200
+- id/email/role đúng user login
+- response không chứa password/token/internal secret
+
+Negative:
+- Không có Authorization -&gt; 401
+- Gửi thêm X-User-Id: 999 -&gt; service vẫn nhận user thật từ gateway
+
+OIDC/JWKS evidence:
+- Chụp issuer và jwks_uri từ discovery document.
+- Chụp JWKS có key dạng RSA/RS256 hoặc public signing key.
+- Chỉ ra code gateway dùng jwk-set-uri để verify token.
+- Chỉ ra internal JWT sau gateway mới dùng HS256 training secret.</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="../index.html">Tổng quan</a>
+          <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

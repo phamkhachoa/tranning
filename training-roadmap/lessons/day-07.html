@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 07 - Learner progress và next action</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a class="active" href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 07: Learner progress và next action</h2>
+          <p>Theo dõi tiến độ học theo learner/course và trả next action cho UI.</p>
+          <div class="meta">
+            <span class="badge">Progress</span>
+            <span class="badge">Learner Runtime</span>
+            <span class="badge">Read Model</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  LearnerWeb["Learner web"] --> Complete["complete lesson API"]
+  MobileApp["Mobile app"] --> Complete
+  Complete --> Access["must be enrolled"]
+  Access --> Curriculum["course-service<br/>modules + lessons"]
+  Access --> ProgressDB[("progress rows")]
+  ProgressDB --> Calc["completed / total"]
+  Curriculum --> Calc
+  Calc --> Dashboard["learning dashboard<br/>progressPercent + nextAction"]
+  Complete -->|same lesson twice| Idempotent["no double count"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Learner xem được danh sách course đang học.</li>
+            <li>Mark lesson complete không làm progress vượt 100%.</li>
+            <li>API trả next action ổn định cho web/app.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Đọc learner runtime trong course-service/enrollment-service: player, module progress, item progress, next action, learning access client.</li>
+            <li>Chốt source of truth: enrollment xác nhận learner có quyền học course; course-service tính curriculum/progress dựa trên published snapshot/item progress.</li>
+            <li>Implement guard trước khi mark complete: user phải có active enrollment hoặc course staff preview; không cho student khác ghi progress hộ.</li>
+            <li>API mark item complete phải nhận courseId/moduleId/itemId; studentId lấy từ CurrentUser; server tự set completedAt.</li>
+            <li>Validate item thuộc course published snapshot hiện tại; item archived/draft không được mark complete.</li>
+            <li>Progress percent = completed required items / total required items; optional item không bắt buộc nhưng có thể hiển thị completed riêng.</li>
+            <li>Next action chọn item required đầu tiên chưa complete theo module position/item position và prerequisite nếu có.</li>
+            <li>Nếu complete lại item đã complete, endpoint idempotent: không tạo duplicate row, không giảm progress.</li>
+            <li>Nếu course publish version mới, xác định rule: progress theo publishedVersionNo hiện tại hoặc migrate mapping; trong training ghi rõ dùng current published snapshot.</li>
+            <li>Expose read endpoint cho learner: progress summary, module states, item states, next action; không trả progress của learner khác.</li>
+            <li>Có thể emit event <code>learning.item.completed</code> hoặc cập nhật enrollment progress summary nếu code đã có outbox.</li>
+            <li>Evidence bắt buộc: student mark complete, progress tăng, next action đổi, mark complete item không thuộc course trả 404/400, student2 không thấy progress student1.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li><code>GET /api/v1/enrollments</code> hoặc dashboard trả progress percent.</li>
+            <li>Complete lesson trùng không tăng sai.</li>
+            <li>Course không có lesson trả progress hợp lý theo rule đã chốt.</li>
+            <li>Student không xem được progress của student khác.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>POST /api/v1/progress/lessons/{lessonId}/complete
+Authorization: Bearer &lt;student_token&gt;
+Expected: progress tăng đúng
+
+GET /api/v1/enrollments
+Expected: course có progressPercent và nextAction
+
+Negative:
+- lesson thuộc course chưa enroll -&gt; 403
+- complete lại lesson đã complete -&gt; idempotent</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-06.html">Ngày 06 - Enrollment</a>
+          <a href="day-08.html">Ngày 08 - Assignment</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -5,6 +5,19 @@ target/
 *.war
 *.ear
 
+### Node / Web ###
+node_modules/
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+
+### Flutter / Dart ###
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+
 ### Logs ###
 *.log
 logs/

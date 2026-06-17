@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 18 - API contract và release readiness</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a class="active" href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 18: API contract và release readiness</h2>
+          <p>Đóng lại khóa bằng contract rõ, lỗi thống nhất, versioning và checklist deploy được.</p>
+          <div class="meta">
+            <span class="badge">OpenAPI</span>
+            <span class="badge">Error contract</span>
+            <span class="badge">Versioning</span>
+            <span class="badge">Release checklist</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Controller["Controller annotations<br/>request/response DTO"] --> Contract["OpenAPI/contract doc"]
+  Contract --> Web["Admin web"]
+  Contract --> Learn["Learner web"]
+  Contract --> App["Mobile app"]
+  Controller --> Error["ApiExceptionHandler<br/>standard error body"]
+  Error --> Evidence["manual evidence"]
+  Evidence --> Release["release readiness<br/>config, migration, rollback"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Không để web/app đoán response field.</li>
+            <li>Chuẩn hóa error body và HTTP status cho các service.</li>
+            <li>Biết cách version API mà không phá client cũ.</li>
+            <li>Chuẩn bị release note ngắn: migration, config, rollback, known issues.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Chọn 5 API quan trọng nhất đã làm: users/me, create course, enroll, submit quiz/assignment, search courses.</li>
+            <li>Với mỗi API, ghi method/path/auth role/request/response/error cases vào <code>api-contract.html</code> hoặc OpenAPI nếu đã thêm dependency.</li>
+            <li>DTO request không nhận field server-owned: userId, ownerId, graderId, status transition actor, createdAt.</li>
+            <li>DTO response không trả password, internal token, storage secret, raw MinIO object key nếu không cần.</li>
+            <li>Chuẩn lỗi: validation 400, unauthenticated 401, forbidden 403, not found 404, duplicate/conflict 409, rate limit 429, dependency failure 502/503.</li>
+            <li>Đọc <code>ApiExceptionHandler</code>: mọi service nên trả cùng shape <code>ErrorDto</code>.</li>
+            <li>Thêm <code>errorCode</code> ổn định cho lỗi quan trọng để web/app dịch message mà không parse text.</li>
+            <li>Versioning: breaking change đi sang <code>/api/v2</code> hoặc thêm field backward-compatible; không đổi nghĩa field cũ âm thầm.</li>
+            <li>Release checklist: env var mới, migration mới, dữ liệu seed demo, compose service health, rollback note nếu migration fail.</li>
+            <li>Evidence cuối khóa: một bảng API contract, một lỗi validation, một lỗi forbidden, một lỗi conflict, một release note ngắn.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>API surface đủ rõ cho admin web, learner web và mobile app.</li>
+            <li>Error contract giống nhau giữa các service chính.</li>
+            <li>Release note nói được cần deploy gì, kiểm tra gì, rollback thế nào.</li>
+            <li>Backlog phase sau có test automation/OpenAPI generation/CI thay vì chỉ “làm tiếp”.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>Contract sample:
+POST /api/admin/v1/courses
+Auth: INSTRUCTOR/ADMIN
+Request: code,title,slug,summary,departmentId,level,listPrice,currency
+Server-owned: ownerId, status, createdAt
+Success: 201 + CourseDraftDto
+Errors: 400 validation, 403 forbidden, 409 duplicate slug
+
+Error evidence:
+POST duplicate slug -> 409 + ErrorDto.errorCode
+Student calls admin API -> 403 + ErrorDto
+
+Release note:
+- migration files changed
+- env var changed
+- smoke commands
+- rollback note</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+          <a href="../index.html">Tổng quan</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

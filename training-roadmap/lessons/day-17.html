@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 17 - Cache, rate limit và resilience</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a class="active" href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 17: Cache, rate limit và resilience</h2>
+          <p>Giảm tải hệ thống nhưng vẫn giữ correctness ở database/service boundary.</p>
+          <div class="meta">
+            <span class="badge">Redis</span>
+            <span class="badge">Rate limit</span>
+            <span class="badge">Timeout</span>
+            <span class="badge">Retry</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Client["Web/App"] --> GW["Gateway"]
+  GW --> RL["Rate limiter<br/>Redis token bucket"]
+  RL --> API["Protected API"]
+  API --> Cache["Cache-aside<br/>short TTL"]
+  Cache --> Redis[("Redis")]
+  Cache --> DB[("Source DB")]
+  API --> ClientCall["Service-to-service client"]
+  ClientCall --> Timeout["timeout + bounded retry"]
+  Timeout --> Downstream["Downstream service"]
+  Timeout --> Fallback["fail closed or graceful error"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Biết chỗ nào được cache, chỗ nào không được cache.</li>
+            <li>Thiết kế rate limit ở gateway cho API dễ bị spam.</li>
+            <li>Thêm timeout/retry có giới hạn cho service-to-service call.</li>
+            <li>Không dùng Redis làm nguồn đúng sai cho nghiệp vụ quan trọng.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Chọn một endpoint read-heavy để cache: public course catalog, course detail, search suggest hoặc RBAC permission decision ngắn hạn.</li>
+            <li>Xác định cache key không chứa dữ liệu nhạy cảm: version prefix + tenant/scope + filter normalized + page/size.</li>
+            <li>Đặt TTL ngắn: catalog 30-120 giây, permission decision 5-30 giây; không cache response chứa token hoặc profile private.</li>
+            <li>Invalidation: khi publish/archive/update course thì delete cache key liên quan hoặc chấp nhận TTL ngắn và ghi rõ trade-off.</li>
+            <li>Với rate limit, chọn key theo userId nếu đã auth, fallback IP cho public endpoint; student không share cùng bucket với admin.</li>
+            <li>Rate limit ở gateway trước khi vào service để giảm tải; API trả 429 với message rõ.</li>
+            <li>Với service-to-service client, đặt timeout nhỏ hơn timeout toàn request; ví dụ access-control 1500ms, token converter 800ms.</li>
+            <li>Retry chỉ cho lỗi transient và idempotent GET/resolve; không retry command tạo dữ liệu nếu thiếu idempotency key.</li>
+            <li>Fail closed cho auth/access decision: không gọi được access-control thì deny hoặc 503, không tự allow.</li>
+            <li>Gắn metric: cache hit/miss, rate limit rejected, downstream timeout/retry.</li>
+            <li>Evidence phải chứng minh: cache hit nhanh hơn hoặc ít query hơn, quá rate limit trả 429, downstream timeout không treo request.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Redis được dùng cho cache/rate-limit, không dùng làm source of truth.</li>
+            <li>Gateway có plan rate limit cho public/search/auth-heavy API.</li>
+            <li>Service client có timeout rõ và lỗi trả về có kiểm soát.</li>
+            <li>Người học giải thích được vì sao retry sai có thể nhân đôi dữ liệu.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>Redis:
+docker exec courseflow-training-redis redis-cli keys '*courseflow*'
+
+Cache evidence:
+GET /api/v1/courses?q=java
+GET lại cùng query
+Expected: cache hit metric/log hoặc thời gian giảm
+
+Rate limit evidence:
+for i in $(seq 1 30); do curl -i http://localhost:28080/api/v1/search/courses?q=java; done
+Expected: một số request trả 429 nếu đã bật limiter
+
+Timeout evidence:
+stop access-control-service hoặc chỉnh URL sai
+Expected: protected API fail closed, không treo quá timeout đã đặt</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-16.html">Ngày 16 - Observability</a>
+          <a href="day-18.html">Ngày 18 - API Contract</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 14 - Integration QA và manual evidence</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a class="active" href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 14: Integration QA và manual evidence</h2>
+          <p>Gom các feature lại thành flow end-to-end và chứng minh bằng request/response/log/DB.</p>
+          <div class="meta">
+            <span class="badge">Manual QA</span>
+            <span class="badge">Integration</span>
+            <span class="badge">Evidence</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart TB
+  Feature["Feature evidence"] --> Happy["happy path request"]
+  Feature --> Error["error/forbidden path"]
+  Feature --> ReadBack["read-back query"]
+  Happy --> Response["HTTP status + response body"]
+  Error --> Response
+  ReadBack --> DBLog["DB row / service log"]
+  Response --> Conclusion["PASS/FAIL + root cause"]
+  DBLog --> Conclusion
+  Conclusion --> BugList["bug list + priority"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Mỗi nhóm có evidence cho feature mình làm.</li>
+            <li>End-to-end flow chính chạy qua gateway.</li>
+            <li>Lỗi blocker được fix hoặc ghi root cause rõ.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Chốt một kịch bản E2E duy nhất để QA: admin/instructor tạo course có media, publish, student search, enroll, học, submit assignment, làm quiz, nhận grade/notification/chat.</li>
+            <li>Reset dữ liệu demo hoặc dùng course mới có slug unique để evidence không lẫn với dữ liệu cũ.</li>
+            <li>Kiểm tra auth đầy đủ: admin, instructor, student, student2; mỗi role có token/session riêng.</li>
+            <li>Khi cần mở nhiều user đồng thời, dùng browser profile khác nhau hoặc normal window + incognito; cùng realm Keycloak không login hai user khác nhau trong cùng browser profile.</li>
+            <li>Chạy health check gateway và service chính: user-management, access-control, course, enrollment, assignment, quiz, gradebook, notification, chat, search, media.</li>
+            <li>Kiểm tra platform: Keycloak realm, Eureka dashboard có registered services, MinIO bucket có object, Kafka Connect connector RUNNING, Elasticsearch index có document.</li>
+            <li>Happy path qua gateway, không gọi trực tiếp service: tất cả URL API dùng <code>http://localhost:28080</code>.</li>
+            <li>Error path authz: student gọi admin publish bị 403, student2 xem submission/grade của student1 bị 403.</li>
+            <li>Error path business: enroll draft/archived course bị reject, duplicate enrollment không tạo bản thứ hai, submit assignment quá attempt/lock bị reject nếu rule có.</li>
+            <li>Read-back path: sau mỗi write quan trọng phải có GET/list chứng minh dữ liệu đã lưu đúng.</li>
+            <li>Kiểm tra eventual consistency: sau publish chờ Debezium/search index, sau grade chờ notification/outbox; evidence ghi rõ wait/retry hợp lý.</li>
+            <li>Gom curl/browser evidence vào một file hoặc mục demo: request, response chính, expected, actual, pass/fail.</li>
+            <li>Tạo backlog phase sau: test automation, observability dashboard, performance search, transcode worker thật, fine-grained RBAC.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Auth/profile/course/enrollment/progress/assessment/notification/search chạy qua gateway.</li>
+            <li>Mỗi feature có ít nhất một negative case.</li>
+            <li>Evidence có token/user/endpoint/status/response chính.</li>
+            <li>Danh sách bug còn lại có priority rõ.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>Template:
+Feature: &lt;name&gt;
+User: &lt;admin|instructor|student&gt;
+Request: &lt;method/path/body&gt;
+Expected: &lt;status + response chính&gt;
+DB/log: &lt;row/log cần kiểm tra&gt;
+Result: PASS/FAIL + root cause nếu fail</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-13.html">Ngày 13 - Search</a>
+          <a href="day-15.html">Ngày 15 - Demo Review</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

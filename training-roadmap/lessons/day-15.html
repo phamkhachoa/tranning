@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 15 - Demo review và backlog phase sau</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a class="active" href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 15: Demo review và backlog phase sau</h2>
+          <p>Demo end-to-end, review design/code/evidence, chốt việc nên làm nếu phát triển tiếp.</p>
+          <div class="meta">
+            <span class="badge">Demo</span>
+            <span class="badge">Review</span>
+            <span class="badge">Backlog</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  WebApp["Web/App clients"] --> Login["Login Keycloak"]
+  Login --> Create["Create course"]
+  Create --> Publish["Publish"]
+  Publish --> Search["Search/catalog"]
+  Search --> Enroll["Enroll"]
+  Enroll --> Learn["Complete lesson"]
+  Learn --> Assess["Assignment/Quiz"]
+  Assess --> Grade["Gradebook"]
+  Grade --> Notify["Notification"]
+  Notify --> Review["Code/design review"]
+  Review --> Backlog["Phase sau backlog"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Demo được flow Course -> Enroll -> Learn -> Assess -> Notify/Search.</li>
+            <li>Giải thích được service boundary và auth/authz.</li>
+            <li>Chốt backlog phase sau theo priority.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Chuẩn bị demo script 10-15 phút theo đúng thứ tự: login, authoring, media, publish, search, enroll, learn, assignment, quiz, gradebook, notification/chat.</li>
+            <li>Mỗi nhóm chọn một người thao tác, một người giải thích architecture, một người trả lời câu hỏi code/design.</li>
+            <li>Trước demo, chạy smoke checklist: compose ps, gateway health, connector status, ES search sample, MinIO console, Keycloak login.</li>
+            <li>Trong demo, chỉ dùng tài khoản demo đã ghi trong README; không tạo credentials tùy tiện khiến người khác khó reproduce.</li>
+            <li>Khi nói về auth, giải thích đủ Keycloak -> gateway verify -> internal JWT -> CurrentUser -> access-control/domain guard.</li>
+            <li>Khi nói về media, giải thích course-service lưu mediaId, media-service sở hữu metadata/signed URL, MinIO lưu bytes.</li>
+            <li>Khi nói về search, giải thích Debezium CDC -> Kafka topic -> search-service consumer -> Elasticsearch index.</li>
+            <li>Code review theo service: controller mỏng, service layer chứa rule, repository không leak domain khác, migration rõ, DTO không leak field nhạy cảm.</li>
+            <li>Review failure handling: duplicate, forbidden, not found, invalid transition, eventual consistency delay, retry/idempotency.</li>
+            <li>Review trade-off: phần nào intentionally simplified trong training, phần nào giống production, phần nào nên làm ở phase sau.</li>
+            <li>Chốt backlog ưu tiên: automated tests, OpenAPI, CI, dashboard/log tracing, performance, real media transcode, advanced recommendation.</li>
+            <li>Kết quả cuối: demo chạy được, evidence đủ, mỗi học viên giải thích được ít nhất một service boundary và một integration pattern.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Demo chạy được hoặc lỗi được giải thích bằng log/root cause.</li>
+            <li>Có checklist pass/fail theo từng feature.</li>
+            <li>Nhóm nói được trade-off và phần chưa production-ready.</li>
+            <li>Có backlog 5-10 việc cho tháng tiếp theo.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>Demo checklist:
+1. Admin/instructor login Keycloak
+2. Create/publish course
+3. Student login/enroll/complete lesson
+4. Submit assignment hoặc quiz
+5. Gradebook cập nhật
+6. Notification/search/chat demo
+7. Show one negative authz case
+8. Show backlog</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-14.html">Ngày 14 - Integration QA</a>
+          <a href="day-16.html">Ngày 16 - Observability</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

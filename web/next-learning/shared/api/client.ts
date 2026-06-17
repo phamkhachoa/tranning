@@ -1,0 +1,192 @@
+"use client";
+
+import { API_BASE_URL, unwrap } from "./envelope";
+import { refreshKeycloakToken } from "@/features/auth/keycloak-auth";
+
+export type LearnerUser = {
+  id: number;
+  email: string;
+  fullName: string;
+  avatarUrl?: string;
+  role?: string;
+  status: string;
+};
+export type StoredSession = {
+  accessToken: string;
+  refreshToken: string;
+  idToken?: string;
+  user: LearnerUser;
+};
+
+const STORAGE_KEY = "courseflow.learning.session";
+const SESSION_CHANGED_EVENT = "courseflow.learning.session.changed";
+
+type SessionListener = (session: StoredSession | null) => void;
+
+function emitSessionChanged(session: StoredSession | null) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<StoredSession | null>(SESSION_CHANGED_EVENT, { detail: session }));
+}
+
+async function readJson<T>(response: Response): Promise<T> {
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
+  if (!text) return undefined as T;
+  return unwrap<T>(JSON.parse(text));
+}
+
+export const learnerSession = {
+  read(): StoredSession | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? (JSON.parse(raw) as StoredSession) : null;
+    } catch {
+      return null;
+    }
+  },
+  write(session: StoredSession): void {
+    if (typeof window === "undefined") return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    emitSessionChanged(session);
+  },
+  clear(): void {
+    if (typeof window === "undefined") return;
+    localStorage.removeItem(STORAGE_KEY);
+    emitSessionChanged(null);
+  },
+  subscribe(listener: SessionListener): () => void {
+    if (typeof window === "undefined") return () => undefined;
+    const onSessionChanged = (event: Event) => {
+      listener((event as CustomEvent<StoredSession | null>).detail ?? null);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY) listener(learnerSession.read());
+    };
+    window.addEventListener(SESSION_CHANGED_EVENT, onSessionChanged);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(SESSION_CHANGED_EVENT, onSessionChanged);
+      window.removeEventListener("storage", onStorage);
+    };
+  }
+};
+
+type ClientFetchOptions = {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  body?: unknown;
+};
+
+type ApiErrorPayload = {
+  title?: string;
+  detail?: string;
+  statusCode?: string;
+};
+
+type CurrentUserProfile = {
+  id: string | number;
+  email?: string;
+  fullName?: string;
+  displayName?: string;
+  avatarUrl?: string;
+  role?: string;
+  status?: string;
+};
+
+function isTrainingSession(session: StoredSession | null | undefined): boolean {
+  return Boolean(session?.accessToken === "training" || session?.accessToken?.startsWith("training:"));
+}
+
+function applyTrainingHeaders(headers: Record<string, string>, session: StoredSession | null | undefined) {
+  if (!session || !isTrainingSession(session)) return;
+  headers["X-Training-User-Id"] = String(session.user.id);
+  headers["X-Training-User-Email"] = session.user.email;
+  headers["X-Training-User-Roles"] = session.user.role || "STUDENT";
+}
+
+export function sessionStompAuthorization(session: StoredSession) {
+  if (isTrainingSession(session)) {
+    return `Training ${session.user.id}:${session.user.email}:${session.user.role || "STUDENT"}`;
+  }
+  return `Bearer ${session.accessToken}`;
+}
+
+export async function hydrateLearnerProfile(): Promise<StoredSession | null> {
+  const existing = learnerSession.read();
+  if (!existing?.accessToken) return existing;
+  const profile = await clientFetch<CurrentUserProfile>("/v1/users/me");
+  const latest = learnerSession.read() ?? existing;
+  const numericUserId = Number(profile.id);
+  const next: StoredSession = {
+    ...latest,
+    user: {
+      ...latest.user,
+      id: Number.isFinite(numericUserId) ? numericUserId : latest.user.id,
+      email: profile.email?.trim() || latest.user.email,
+      fullName: profile.fullName?.trim() || profile.displayName?.trim() || latest.user.fullName,
+      avatarUrl: profile.avatarUrl?.trim() || latest.user.avatarUrl,
+      role: profile.role?.trim() || latest.user.role,
+      status: profile.status?.trim() || latest.user.status
+    }
+  };
+  learnerSession.write(next);
+  return next;
+}
+
+/**
+ * Browser-side fetch with the learner bearer token attached. On a 401 it tries
+ * one refresh, then replays the request once.
+ */
+export async function clientFetch<T>(
+  path: string,
+  { method = "GET", body }: ClientFetchOptions = {}
+): Promise<T> {
+  const run = async (session?: StoredSession | null): Promise<Response> => {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (session?.accessToken) headers.Authorization = `Bearer ${session.accessToken}`;
+    applyTrainingHeaders(headers, session);
+    return fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined
+    });
+  };
+
+  let session = learnerSession.read();
+  let response = await run(session);
+
+  if (response.status === 401 && session?.refreshToken) {
+    try {
+      const refreshed = await refreshKeycloakToken(session.refreshToken);
+      const next: StoredSession = {
+        ...refreshed,
+        user: {
+          ...refreshed.user,
+          fullName: refreshed.user.fullName || session.user.fullName,
+          avatarUrl: session.user.avatarUrl ?? refreshed.user.avatarUrl,
+          role: session.user.role || refreshed.user.role,
+          status: session.user.status || refreshed.user.status
+        }
+      };
+      learnerSession.write(next);
+      session = next;
+      response = await run(next);
+    } catch {
+      learnerSession.clear();
+    }
+  }
+
+  if (!response.ok) {
+    let message = `Request ${path} failed with ${response.status}`;
+    try {
+      const payload = (await response.json()) as ApiErrorPayload;
+      message = payload.detail ?? payload.title ?? message;
+    } catch {
+      // Keep the generic message when the server does not return JSON.
+    }
+    const error = new Error(message) as Error & { status?: number };
+    error.status = response.status;
+    throw error;
+  }
+  return readJson<T>(response);
+}

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 13 - Search CDC, suggest và recommend-lite</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a class="active" href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 13: Search CDC, suggest và recommend-lite</h2>
+          <p>Dùng Debezium CDC để đồng bộ course published sang Elasticsearch, rồi search/autocomplete/recommend thay vì SQL LIKE hoặc DB polling.</p>
+          <div class="meta">
+            <span class="badge">Debezium</span>
+            <span class="badge">Kafka Connect</span>
+            <span class="badge">CDC</span>
+            <span class="badge">Elasticsearch</span>
+            <span class="badge">Search</span>
+            <span class="badge">Suggest</span>
+            <span class="badge">Recommend</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Course["course-service<br/>publish/update/archive"] --> CourseDB[("cf_course.public.courses<br/>source of truth")]
+  CourseDB --> Debezium["Debezium PostgreSQL Connector<br/>courseflow-course-search-cdc"]
+  Debezium --> Topic[("Kafka topic<br/>courseflow.course.public.courses")]
+  Topic --> Consumer["search-service<br/>CourseSearchEventConsumer"]
+  Consumer --> ES[("Elasticsearch<br/>courseflow-course-search")]
+  Learner["Learner web"] --> Search["GET /api/v1/search/courses"]
+  MobileApp["Mobile app"] --> Search
+  Learner --> Suggest["GET /api/v1/search/courses/suggest"]
+  MobileApp --> Suggest
+  Learner --> Recommend["GET /api/v1/search/courses/recommendations"]
+  MobileApp --> Recommend
+  Search --> ES
+  Suggest --> ES
+  Recommend --> ES
+  ES --> Results["published-only results"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Index course public vào Elasticsearch.</li>
+            <li>Debezium connector chạy RUNNING và emit CDC từ bảng <code>public.courses</code>.</li>
+            <li>Search keyword/filter/paging qua Elasticsearch.</li>
+            <li>Suggest và recommendations chạy nhanh cho UI.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Đọc <code>docker-compose.training.yml</code>: Postgres chạy <code>wal_level=logical</code>, Kafka Connect expose <code>18083</code>, setup container đăng ký connector sau khi course-service healthy.</li>
+            <li>Đọc <code>infra/docker/debezium/course-search-cdc-connector-config.json</code>: connector class PostgreSQL, database <code>cf_course</code>, table <code>public.courses</code>, topic <code>courseflow.course.public.courses</code>.</li>
+            <li>Start stack và verify connector bằng <code>curl http://localhost:18083/connectors/courseflow-course-search-cdc/status</code>; pass khi connector và task đều RUNNING.</li>
+            <li>Đọc Kafka topic CDC bằng console consumer nếu cần debug: payload Debezium có <code>op</code>, <code>before</code>, <code>after</code>, <code>source.lsn</code>, <code>ts_ms</code>.</li>
+            <li>Đọc <code>CourseSearchEventConsumer</code>: consumer group <code>search-service</code>, topic config <code>courseflow.search.kafka.course-cdc-topic</code>.</li>
+            <li>Map Debezium row sang search DTO: id, code, title, slug, summary, departmentId, level, status. Nếu thiếu field bắt buộc thì log warn và mark processed.</li>
+            <li>Idempotency key = courseId + op + tx/lsn; ES upsert/delete idempotent, processed marker lưu sau khi ES write xong.</li>
+            <li>Rule projection: <code>op=d</code> hoặc status khác PUBLISHED thì delete document; status PUBLISHED thì upsert document.</li>
+            <li>Đọc mapping Elasticsearch <code>CourseSearchDocument</code>: text fields dùng analyzer, exact fields keyword, status luôn keyword để filter.</li>
+            <li>Implement search query: bool filter status=PUBLISHED, must multi_match title^4/summary khi có q, pageable có max size.</li>
+            <li>Implement suggest: bool-prefix hoặc prefix-friendly query, limit max 10, trả DTO ngắn đủ cho UI autocomplete.</li>
+            <li>Implement recommend-lite: keyword/level/departmentId thành should clauses có boost; nếu không có signal thì trả catalog published nổi bật hoặc recent.</li>
+            <li>Giữ manual index endpoint staff-only cho backfill/debug; không dùng nó làm đường sync chính trong demo.</li>
+            <li>Evidence bắt buộc: connector status RUNNING, publish course -> CDC topic có event -> ES có document -> search thấy course, archive/draft -> search không thấy.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Search "java" trả course phù hợp.</li>
+            <li>Suggest "jav" trả top kết quả ngắn.</li>
+            <li>Recommend dùng category/level/keyword signal.</li>
+            <li>Update course title/summary bên course-service tự phản ánh sang Elasticsearch qua Debezium.</li>
+            <li>Không dùng repository SQL LIKE cho public search.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>GET http://localhost:18083/connectors/courseflow-course-search-cdc/status
+Expected: connector.state=RUNNING, tasks[0].state=RUNNING
+
+POST /api/admin/v1/courses/{id}/publish
+Expected: row public.courses.status=PUBLISHED, Debezium emit event
+
+GET /api/v1/search/courses?q=java&amp;level=BEGINNER
+Expected: results từ Elasticsearch
+
+GET /api/v1/search/courses/suggest?q=jav
+Expected: top suggestions
+
+Negative:
+- draft/archive course không xuất hiện hoặc bị delete khỏi index
+- tắt Elasticsearch thì search-service báo lỗi rõ</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-12.html">Ngày 12 - Chat</a>
+          <a href="day-14.html">Ngày 14 - Integration QA</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

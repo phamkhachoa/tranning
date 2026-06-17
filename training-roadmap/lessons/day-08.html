@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 08 - Assignment submission và feedback</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a class="active" href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 08: Assignment submission và feedback</h2>
+          <p>Learner nộp bài, file attachment đi qua signed URL/MinIO, instructor chấm điểm và phản hồi theo lifecycle rõ.</p>
+          <div class="meta">
+            <span class="badge">Assignment</span>
+            <span class="badge">Submission</span>
+            <span class="badge">MinIO</span>
+            <span class="badge">Feedback</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Instructor["Instructor<br/>Admin web"] --> Assignment["create assignment"]
+  Assignment --> AssignmentDB[("assignment DB")]
+  Student["Learner web"] --> Submit["submit/resubmit"]
+  MobileApp["Mobile app"] --> Submit
+  Student --> Upload["request signed upload URL"]
+  MobileApp --> Upload
+  Upload --> MinIO[("MinIO<br/>courseflow-submissions")]
+  Submit --> EnrollCheck["must be enrolled"]
+  EnrollCheck --> SubmissionDB[("submission")]
+  Instructor --> Grade["grade + feedback"]
+  Grade --> Ownership["must teach course"]
+  Ownership --> SubmissionDB
+  Grade --> GradeEvent["grade update<br/>API/event to gradebook"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Instructor tạo assignment cho course.</li>
+            <li>Learner đã enroll submit/resubmit theo rule.</li>
+            <li>Instructor grade submission và lưu feedback.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Đọc assignment-service: assignment, submission, attachment grant, rubric, grading, learning access client, ObjectStorageClient.</li>
+            <li>Chốt assignment lifecycle: DRAFT/PUBLISHED/ACTIVE, availableAt/dueAt/lockAt optional, maxAttempts, submissionTypes TEXT/URL/FILE.</li>
+            <li>Instructor create assignment: lấy instructor từ CurrentUser, check course staff access, validate maxScore > 0, dueAt sau availableAt nếu có.</li>
+            <li>Learner submit: check active enrollment qua course/enrollment access client, check assignment visible/open, check attempts còn lại.</li>
+            <li>Text/link submission: validate không rỗng, URL hợp lệ nếu submissionUrl, sanitize/limit length.</li>
+            <li>File submission: gọi <code>POST /api/v1/assignments/{id}/attachments/upload-url</code>, PUT file lên MinIO bằng signed URL, submit kèm storageKey/fileName/contentType/size.</li>
+            <li>Khi nhận storageKey trong submit, verify grant thuộc assignment + student + chưa hết hạn; có thể gọi storage.exists để chắc object đã upload.</li>
+            <li>Resubmit rule: nếu maxAttempts > current attempt và chưa locked; submission mới tăng attemptNo, không overwrite bản cũ.</li>
+            <li>Instructor grading: check course staff, score trong 0..maxScore, apply late penalty nếu có, lưu feedback và gradedBy/gradedAt.</li>
+            <li>Rubric optional: nếu có rubric criteria, validate tổng điểm rubric khớp rawScore hoặc không vượt maxScore.</li>
+            <li>Sau grade, phát outbox/event hoặc gọi gradebook integration theo contract để ngày 10 aggregate được.</li>
+            <li>Download attachment: owner hoặc course staff mới lấy presigned download URL; không expose public MinIO object key như URL cố định.</li>
+            <li>Evidence bắt buộc: upload-url -> PUT MinIO -> submit file, instructor grade, download URL works, submit quá hạn/không enroll bị reject.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Learner submit bài và xem submission của mình.</li>
+            <li>Instructor xem queue cần chấm theo course.</li>
+            <li>Score nằm trong range hợp lệ.</li>
+            <li>Submission đã GRADED không resubmit nếu rule không cho phép.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>POST /api/v1/assignments/{id}/submissions
+Authorization: Bearer &lt;student_token&gt;
+Body: {"content":"..."}
+Expected: status SUBMITTED
+
+File flow:
+POST /api/v1/assignments/{id}/attachments/upload-url
+PUT file lên MinIO bằng signed URL
+POST /api/v1/assignments/{id}/submissions với storageKey đã upload
+
+POST /api/admin/v1/submissions/{id}/grade
+Authorization: Bearer &lt;instructor_token&gt;
+Body: {"score":85,"feedback":"Good"}
+Expected: status GRADED
+
+Negative:
+- student chưa enroll submit -&gt; 403
+- instructor khác course grade -&gt; 403</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-07.html">Ngày 07 - Progress</a>
+          <a href="day-09.html">Ngày 09 - Quiz</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

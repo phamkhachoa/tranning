@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CourseFlow Mini - Lộ trình implementation 18 ngày</title>
+  <link rel="stylesheet" href="assets/roadmap.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a class="active" href="index.html">Tổng quan</a>
+      <a href="system-overview.html">System Overview</a>
+      <a href="api-contract.html">API Contract</a>
+      <a href="auth-flow.html">Auth Flow</a>
+      <a href="db-design-guide.html">DB Design</a>
+      <a href="service-todo.html">Service TODO</a>
+      <a href="lessons/day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="lessons/day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="lessons/day-03.html">Ngày 03 - User Admin</a>
+      <a href="lessons/day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="lessons/day-05.html">Ngày 05 - Publish</a>
+      <a href="lessons/day-06.html">Ngày 06 - Enrollment</a>
+      <a href="lessons/day-07.html">Ngày 07 - Progress</a>
+      <a href="lessons/day-08.html">Ngày 08 - Assignment</a>
+      <a href="lessons/day-09.html">Ngày 09 - Quiz</a>
+      <a href="lessons/day-10.html">Ngày 10 - Gradebook</a>
+      <a href="lessons/day-11.html">Ngày 11 - Notification</a>
+      <a href="lessons/day-12.html">Ngày 12 - Chat</a>
+      <a href="lessons/day-13.html">Ngày 13 - Search</a>
+      <a href="lessons/day-14.html">Ngày 14 - Integration QA</a>
+      <a href="lessons/day-15.html">Ngày 15 - Demo Review</a>
+      <a href="lessons/day-16.html">Ngày 16 - Observability</a>
+      <a href="lessons/day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="lessons/day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Lộ trình implementation 18 ngày</h2>
+          <p>
+            Bỏ ngày đọc tổng quan riêng. Mỗi ngày phải tạo hoặc hoàn thiện một phần chạy được của
+            CourseFlow Mini. Đọc code, đọc Docker, đọc Liquibase chỉ làm khi cần để implement.
+          </p>
+          <div class="meta">
+            <span class="badge">Java 21</span>
+            <span class="badge">Spring Boot</span>
+            <span class="badge">PostgreSQL</span>
+            <span class="badge">Liquibase</span>
+            <span class="badge">Keycloak</span>
+            <span class="badge">Gateway</span>
+            <span class="badge">Eureka</span>
+            <span class="badge">MinIO</span>
+            <span class="badge">Debezium</span>
+            <span class="badge">Elasticsearch</span>
+            <span class="badge">MongoDB</span>
+            <span class="badge">Prometheus</span>
+            <span class="badge">Grafana</span>
+            <span class="badge amber">AI-assisted</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ hệ thống</h2>
+          <p>
+            Bắt đầu từ <a href="system-overview.html">System Overview</a> để nhìn toàn bộ web/app client,
+            Keycloak, gateway, service, database, event, chat và search trước khi bắt đầu bài.
+          </p>
+        </section>
+
+        <section class="panel">
+          <h2>Chuẩn trước khi vào ngày 01</h2>
+          <ul>
+            <li>Pull source, cài JDK 21, Maven, Docker, Node.</li>
+            <li>Chạy stack: <code>cd backend/infra/docker && docker compose -f docker-compose.training.yml up -d --build</code>.</li>
+            <li>Mở Keycloak: <code>http://localhost:18080</code>, admin console <code>admin/admin</code>.</li>
+            <li>Mở gateway health: <code>http://localhost:28080/actuator/health</code>.</li>
+            <li>Mở Kafka Connect status khi tới ngày 13: <code>http://localhost:18083/connectors/courseflow-course-search-cdc/status</code>.</li>
+            <li>Mở Prometheus/Grafana khi tới ngày 16 bằng profile <code>observability</code>: <code>http://localhost:19090</code>, <code>http://localhost:13000</code>.</li>
+            <li>Mở web admin <code>http://localhost:5173/login</code>, learner web <code>http://localhost:3000/login</code>; mobile app dùng cùng gateway API.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Service nền giữ nguyên</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>Dùng để học gì</th>
+                <th>Cách dùng trong bài</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>discovery-service</code></td>
+                <td>Eureka registry, service discovery, health/registration UI.</td>
+                <td>Cho học viên mở <code>http://localhost:8761</code>, quan sát service đăng ký; không bắt tự code registry.</td>
+              </tr>
+              <tr>
+                <td><code>media-service</code></td>
+                <td>Media metadata, signed URL, video readiness, MinIO bucket <code>courseflow-media</code>.</td>
+                <td>Dùng như platform service khi làm course material/publish; không bắt implement lại trong 18 ngày.</td>
+              </tr>
+              <tr>
+                <td><code>MinIO</code></td>
+                <td>S3-compatible object storage cho tài liệu, video source và file submission.</td>
+                <td>Bắt học viên dùng signed URL, kiểm tra bucket trên console <code>http://localhost:9001</code>.</td>
+              </tr>
+              <tr>
+                <td><code>Debezium/Kafka Connect</code></td>
+                <td>CDC từ bảng <code>cf_course.public.courses</code> sang Kafka topic để build search read model.</td>
+                <td>Dùng ở ngày 13: cấu hình connector, đọc CDC envelope, verify search-service cập nhật Elasticsearch.</td>
+              </tr>
+              <tr>
+                <td><code>Prometheus/Grafana</code></td>
+                <td>Metrics, scrape targets, dashboard, alert rule và service health.</td>
+                <td>Dùng ở ngày 16: bật profile observability, đọc metric, truy lỗi bằng correlation id.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>Format mỗi bài</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Mục</th>
+                <th>Nội dung cần có</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Mục tiêu</td>
+                <td>Feature cụ thể cần chạy được trong ngày.</td>
+              </tr>
+              <tr>
+                <td>Cách impl</td>
+                <td>Service, API, DB migration, business rule, integration cần sửa.</td>
+              </tr>
+              <tr>
+                <td>Kết quả cần đạt</td>
+                <td>Endpoint/web flow chạy được, response đúng contract, lỗi xử lý rõ.</td>
+              </tr>
+              <tr>
+                <td>Evidence</td>
+                <td>Curl/browser flow, response chính, DB/log liên quan, kết luận pass/fail.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>Đi từ tài liệu sang code</h2>
+          <ol class="rubric">
+            <li>Mở bài học trong thư mục <code>training-roadmap/lessons</code> để biết feature và API cần chạy.</li>
+            <li>Mở <code>api-contract.html</code> để giữ đúng path cho admin web, learner web và mobile app.</li>
+            <li>Tìm đúng comment trong code: <code>rg 'TODO\(training-day-04' backend/services</code>.</li>
+            <li>Đọc thêm comment <code>TRAINING(...)</code> quanh controller, DTO, service và repository để hiểu boundary hiện có.</li>
+            <li>Đề xuất DB/migration ngắn trước khi code: table, index, unique constraint, rollback note.</li>
+            <li>Implement ở service layer trước; controller chỉ nhận request, gọi service và trả response.</li>
+            <li>Chạy evidence cuối bài: happy path, một lỗi quan trọng, một read-back query hoặc log/DB check.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>18 ngày</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Ngày</th>
+                <th>Feature</th>
+                <th>Service chính</th>
+                <th>Kết quả cần đạt</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><a href="lessons/day-01.html">01</a></td>
+                <td>Keycloak login, current user, profile baseline</td>
+                <td>api-gateway, user-management-service</td>
+                <td>Login web/app bằng Keycloak, gọi được <code>GET /api/v1/users/me</code> qua cùng gateway.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-02.html">02</a></td>
+                <td>RBAC và protected admin API</td>
+                <td>api-gateway, access-control-service</td>
+                <td>Student bị chặn admin API; admin/instructor được phép theo role.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-03.html">03</a></td>
+                <td>User admin, directory, status</td>
+                <td>user-management-service</td>
+                <td>Admin list/search/deactivate user; learner update profile.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-04.html">04</a></td>
+                <td>Course CRUD</td>
+                <td>course-service</td>
+                <td>Instructor tạo/sửa draft; material có thể tham chiếu <code>mediaId</code> từ media-service.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-05.html">05</a></td>
+                <td>Publish workflow</td>
+                <td>course-service, access-control-service, media-service</td>
+                <td>Draft -> review -> published, có readiness rule với video/document media.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-06.html">06</a></td>
+                <td>Enrollment</td>
+                <td>enrollment-service</td>
+                <td>Learner enroll course published, chống duplicate active enrollment.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-07.html">07</a></td>
+                <td>Learner progress</td>
+                <td>enrollment-service, course-service</td>
+                <td>Mark lesson complete, progress percent, next action.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-08.html">08</a></td>
+                <td>Assignment submission</td>
+                <td>assignment-service</td>
+                <td>Learner submit/resubmit file qua MinIO; instructor grade/comment.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-09.html">09</a></td>
+                <td>Quiz attempt</td>
+                <td>quiz-service</td>
+                <td>Instructor tạo quiz; learner submit attempt và nhận score.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-10.html">10</a></td>
+                <td>Gradebook</td>
+                <td>gradebook-service</td>
+                <td>Aggregate assignment/quiz score, learner/instructor view đúng quyền.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-11.html">11</a></td>
+                <td>Notification + outbox</td>
+                <td>notification-service, outbox-relay</td>
+                <td>Event tạo notification, list/mark read, consumer idempotent.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-12.html">12</a></td>
+                <td>Course chat</td>
+                <td>chat-service</td>
+                <td>Room theo course, message history MongoDB, STOMP realtime mẫu.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-13.html">13</a></td>
+                <td>Search CDC, suggest, recommend-lite</td>
+                <td>Debezium, Kafka Connect, search-service</td>
+                <td>Course publish/update tự sync vào Elasticsearch qua CDC, không dùng SQL LIKE hoặc DB polling.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-14.html">14</a></td>
+                <td>Integration QA</td>
+                <td>Backend + gateway + web</td>
+                <td>End-to-end flow chạy được, evidence đủ happy/error/read-back.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-15.html">15</a></td>
+                <td>Demo review</td>
+                <td>Toàn flow</td>
+                <td>Demo, review code/design, chốt backlog phase sau.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-16.html">16</a></td>
+                <td>Observability</td>
+                <td>Prometheus, Grafana, gateway, common-library</td>
+                <td>Scrape metrics, trace request bằng correlation id, đọc alert rule.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-17.html">17</a></td>
+                <td>Cache, rate limit, resilience</td>
+                <td>Redis, api-gateway, service clients</td>
+                <td>Thiết kế cache TTL, rate limit, timeout/retry/fail-closed cho call liên service.</td>
+              </tr>
+              <tr>
+                <td><a href="lessons/day-18.html">18</a></td>
+                <td>API contract và release readiness</td>
+                <td>Gateway + các service chính</td>
+                <td>Chuẩn hóa API/error contract, versioning, release note và rollback note.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>Khi nào coi là xong</h2>
+          <ol class="rubric">
+            <li>API chạy qua gateway, protected endpoint có auth/authz.</li>
+            <li>DB thay đổi bằng Liquibase, không sửa tay database.</li>
+            <li>Business rule nằm ở service layer, controller mỏng.</li>
+            <li>Response đủ cho web/admin/learner dùng, lỗi có message rõ.</li>
+            <li>Có evidence: request, response, DB/log, kết luận.</li>
+            <li>Test tự động optional trong phase này.</li>
+          </ol>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auth Flow - CourseFlow Mini</title>
+  <link rel="stylesheet" href="assets/roadmap.css" />
+  <script defer src="assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="index.html">Tổng quan</a>
+      <a href="system-overview.html">System Overview</a>
+      <a href="api-contract.html">API Contract</a>
+      <a class="active" href="auth-flow.html">Auth Flow</a>
+      <a href="db-design-guide.html">DB Design</a>
+      <a href="service-todo.html">Service TODO</a>
+      <a href="lessons/day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="lessons/day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="lessons/day-03.html">Ngày 03 - User Admin</a>
+      <a href="lessons/day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="lessons/day-05.html">Ngày 05 - Publish</a>
+      <a href="lessons/day-06.html">Ngày 06 - Enrollment</a>
+      <a href="lessons/day-07.html">Ngày 07 - Progress</a>
+      <a href="lessons/day-08.html">Ngày 08 - Assignment</a>
+      <a href="lessons/day-09.html">Ngày 09 - Quiz</a>
+      <a href="lessons/day-10.html">Ngày 10 - Gradebook</a>
+      <a href="lessons/day-11.html">Ngày 11 - Notification</a>
+      <a href="lessons/day-12.html">Ngày 12 - Chat</a>
+      <a href="lessons/day-13.html">Ngày 13 - Search</a>
+      <a href="lessons/day-14.html">Ngày 14 - Integration QA</a>
+      <a href="lessons/day-15.html">Ngày 15 - Demo Review</a>
+      <a href="lessons/day-16.html">Ngày 16 - Observability</a>
+      <a href="lessons/day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="lessons/day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Luồng AuthN/AuthZ đầy đủ</h2>
+          <p>
+            CourseFlow Mini dạy auth theo stack thật: web/app login bằng Keycloak/OIDC, gateway verify
+            access token, rồi downstream service chỉ tin internal JWT và trusted headers do gateway set.
+            Để giảm độ khó, bản training bỏ STS riêng và cho gateway tự sinh internal JWT local.
+          </p>
+          <div class="meta">
+            <span class="badge">Authentication</span>
+            <span class="badge">Authorization</span>
+            <span class="badge">OIDC + PKCE</span>
+            <span class="badge">RBAC</span>
+            <span class="badge amber">Local internal JWT</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Hai khái niệm bắt buộc phân biệt</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Khái niệm</th>
+                <th>Trả lời câu hỏi</th>
+                <th>Owner trong CourseFlow Mini</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Authentication</td>
+                <td>Bạn là ai?</td>
+                <td>Keycloak/OIDC Authorization Code + PKCE; gateway verify JWT bằng JWKS.</td>
+              </tr>
+              <tr>
+                <td>Authorization</td>
+                <td>Bạn có được làm hành động này trên tài nguyên này không?</td>
+                <td>Gateway coarse guard, access-control-service RBAC, domain service resource guard.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>Từ JWT secret sang OAuth2/OIDC JWKS</h2>
+          <p>
+            Trước khóa này, các bạn có thể đã quen với bài đơn giản: backend tự ký JWT bằng một
+            <code>secret key</code>, rồi chính backend verify lại bằng cùng secret đó. Cách đó phù hợp
+            để học JWT format, nhưng không phải mô hình chuẩn cho web/app đăng nhập qua một Identity
+            Provider như Keycloak.
+          </p>
+          <table>
+            <thead>
+              <tr>
+                <th>Tiêu chí</th>
+                <th>JWT HS256 bằng secret key</th>
+                <th>OAuth2/OIDC access token bằng JWKS</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Ai ký token?</td>
+                <td>Chính backend hoặc auth-service nội bộ.</td>
+                <td>Keycloak ký token bằng private key của realm.</td>
+              </tr>
+              <tr>
+                <td>Ai verify?</td>
+                <td>Service nào có shared secret đều verify được.</td>
+                <td>API Gateway tải public key từ JWKS endpoint của Keycloak để verify chữ ký.</td>
+              </tr>
+              <tr>
+                <td>Key dùng để verify</td>
+                <td>Cùng một secret dùng cho cả ký và verify.</td>
+                <td>Public key theo <code>kid</code> trong JWT header; private key không rời Keycloak.</td>
+              </tr>
+              <tr>
+                <td>Rủi ro chính</td>
+                <td>Lộ secret là có thể tự ký token giả.</td>
+                <td>Service chỉ có public key nên không thể tự ký token Keycloak giả.</td>
+              </tr>
+              <tr>
+                <td>Phù hợp để học gì?</td>
+                <td>JWT cơ bản, signature, expiry.</td>
+                <td>Auth thật: issuer, audience, key rotation, client login, SSO.</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout">
+            <strong>Quy tắc bắt buộc:</strong> external token từ Keycloak phải verify bằng
+            <code>issuer + audience + JWKS/public key</code>. Không được quay lại kiểu tự decode payload
+            rồi tin claim, cũng không dùng shared secret để verify token Keycloak.
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>API Gateway verify Keycloak token như thế nào?</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Web/App
+  participant KC as Keycloak Realm
+  participant GW as API Gateway
+  participant JWKS as Keycloak JWKS
+  participant DS as Downstream Service
+
+  C->>KC: Authorization Code + PKCE
+  KC-->>C: access_token RS256
+  C->>GW: Authorization: Bearer access_token
+  GW->>GW: read JWT header kid/alg
+  GW->>JWKS: GET /protocol/openid-connect/certs
+  JWKS-->>GW: public keys
+  GW->>GW: select key by kid and verify signature
+  GW->>GW: validate iss, aud, exp, sub
+  GW->>GW: resolve user/roles and mint internal JWT
+  GW->>DS: X-Internal-Authorization + trusted X-User-*
+            </div>
+          </div>
+          <ol>
+            <li>Keycloak phát hành access token. Token thường dùng asymmetric signing như <code>RS256</code>: private key ký, public key verify.</li>
+            <li>JWT header có <code>kid</code>. Gateway dùng <code>kid</code> để chọn đúng public key trong JWKS.</li>
+            <li>Gateway dùng <code>NimbusReactiveJwtDecoder.withJwkSetUri(...)</code> để tải/cache JWKS và verify chữ ký.</li>
+            <li>Sau chữ ký, gateway vẫn phải validate <code>iss</code>, <code>aud</code>, <code>exp</code>, <code>sub</code>. Verify signature đúng nhưng sai audience vẫn phải reject.</li>
+            <li>Gateway không lấy role client gửi qua header. Nó xóa mọi <code>X-User-*</code> từ client rồi tự set lại trusted headers.</li>
+            <li>Trong training, <code>TOKEN_CONVERTER_MODE=local</code>: sau khi verify token Keycloak, gateway tự sinh internal JWT HS256 cho downstream service.</li>
+          </ol>
+          <pre><code>External token:
+Keycloak private key --sign--&gt; access_token
+API Gateway JWKS public key --verify--&gt; accepted/rejected
+
+Internal token trong mini stack:
+API Gateway local HS256 secret --sign--&gt; X-Internal-Authorization
+Downstream service same internal secret --verify--&gt; CurrentUser</code></pre>
+        </section>
+
+        <section class="panel">
+          <h2>Code cần đọc trong gateway</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Cần hiểu gì?</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>ConfiguredGatewayExternalTokenVerifier</code></td>
+                <td>Dùng <code>NimbusReactiveJwtDecoder.withJwkSetUri</code> để verify access token từ Keycloak bằng JWKS.</td>
+              </tr>
+              <tr>
+                <td><code>ExternalTokenProperties</code></td>
+                <td>Nơi lấy <code>issuer</code>, <code>jwk-set-uri</code>, <code>audiences</code> từ env/config.</td>
+              </tr>
+              <tr>
+                <td><code>OAuth2AudienceValidator</code></td>
+                <td>Validate <code>iss</code>, <code>aud</code> và <code>sub</code>; đây là phần học viên hay bỏ sót.</td>
+              </tr>
+              <tr>
+                <td><code>JwtAuthenticationGatewayFilter</code></td>
+                <td>Strip forged headers, gọi verifier, map identity, mint internal JWT, forward trusted identity.</td>
+              </tr>
+              <tr>
+                <td><code>application.yml</code></td>
+                <td>Cấu hình <code>KEYCLOAK_ISSUER_URI</code>, <code>KEYCLOAK_JWK_SET_URI</code>, <code>KEYCLOAK_AUDIENCE</code>, internal JWT.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>Lệnh kiểm chứng bắt buộc</h2>
+          <pre><code># 1. Xem public keys mà gateway dùng để verify Keycloak token
+curl http://localhost:18080/realms/courseflow/protocol/openid-connect/certs
+
+# 2. Xem issuer và jwks_uri từ OIDC discovery document
+curl http://localhost:18080/realms/courseflow/.well-known/openid-configuration
+
+# 3. Xem runtime env của gateway trong training stack
+docker compose -f backend/infra/docker/docker-compose.training.yml exec -T api-gateway sh -c \
+  'env | sort | grep -E "COURSEFLOW_TRAINING_AUTH_BYPASS|TOKEN_CONVERTER_MODE|KEYCLOAK_ISSUER_URI|KEYCLOAK_JWK_SET_URI|KEYCLOAK_AUDIENCE|COURSEFLOW_INTERNAL_JWT_ALGORITHM"'</code></pre>
+          <p>Kết quả mong đợi trong flow thật:</p>
+          <pre><code>COURSEFLOW_TRAINING_AUTH_BYPASS=false
+TOKEN_CONVERTER_MODE=local
+KEYCLOAK_AUDIENCE=courseflow-api
+KEYCLOAK_JWK_SET_URI=http://keycloak:8080/realms/courseflow/protocol/openid-connect/certs
+COURSEFLOW_INTERNAL_JWT_ALGORITHM=HS256</code></pre>
+          <div class="callout">
+            <strong>Lưu ý địa chỉ:</strong> trình duyệt thấy Keycloak qua <code>localhost:18080</code>,
+            nhưng container gateway gọi Keycloak bằng DNS nội bộ Docker <code>keycloak:8080</code>.
+            Hai URL này cùng trỏ tới realm <code>courseflow</code> trong môi trường khác nhau.
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Keycloak training flow</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant W as Web/App Client
+  participant KC as Keycloak
+  participant GW as API Gateway
+  participant UM as user-management
+  participant AC as access-control
+  participant DS as Domain Service
+
+  U->>W: Click login on web/app
+  W->>KC: Authorization Code + PKCE
+  KC-->>W: authorization code
+  W->>KC: exchange code
+  KC-->>W: access token
+  W->>GW: API request + Bearer token
+  GW->>KC: fetch JWKS if needed
+  GW->>GW: verify issuer + audience + signature
+  GW->>GW: map demo email to userId/role
+  GW->>GW: mint local internal JWT
+  GW->>DS: X-User-* + X-Internal-Authorization
+  DS->>DS: verify internal JWT
+  DS->>AC: permission/resource check
+  AC-->>DS: allow/deny + audit
+  DS-->>GW: response
+  GW-->>W: response
+            </div>
+          </div>
+          <pre><code>1. User mở Admin web, Learner web hoặc Mobile app.
+2. User bấm đăng nhập.
+3. Web/app dùng Authorization Code + PKCE redirect sang Keycloak.
+4. Keycloak xác thực password và trả authorization code.
+5. Web/app đổi code lấy access token.
+6. Web/app gọi API Gateway với Authorization: Bearer &lt;external_access_token&gt;.
+7. API Gateway verify JWT bằng issuer, audience và JWKS của Keycloak.
+8. Gateway map demo user từ Keycloak claim sang user id/role trong database training.
+9. Gateway tự sinh internal JWT ngắn hạn bằng local signing key của mini stack.
+10. Gateway xóa mọi header X-User-* từ client rồi set lại X-User-Id, X-User-Roles, X-Internal-Authorization.
+11. Downstream service chỉ tin request có internal JWT hợp lệ.
+12. Controller nhận CurrentUser từ common-library.
+13. Service kiểm tra quyền: role/permission qua access-control-service và resource ownership/enrollment/staff access trong domain.
+14. Access-control ghi audit decision: subject, permission, scope, allowed/denied, reason.</code></pre>
+          <div class="callout">
+            <strong>Giản lược có chủ đích:</strong> production có thể dùng STS/token-converter riêng.
+            Training dùng <code>TOKEN_CONVERTER_MODE=local</code> để học đúng boundary mà không phải vận hành thêm một service auth.
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Stack local cần chạy</h2>
+          <pre><code>cd backend/infra/docker
+docker compose -f docker-compose.training.yml up -d --build</code></pre>
+          <p>
+            Keycloak chạy tại <code>http://localhost:18080</code>. Admin console dùng
+            <code>admin/admin</code>. Web admin dùng client <code>courseflow-admin-web</code>;
+            learner web dùng client <code>courseflow-learner-web</code>; mobile app dùng client
+            <code>courseflow-mobile</code>. Cả ba client cùng realm <code>courseflow</code> và đều gọi
+            cùng API Gateway.
+          </p>
+        </section>
+
+        <section class="panel">
+          <h2>Fallback bypass flow</h2>
+          <p>
+            Chế độ này chỉ dùng khi cần tiếp tục lớp học dù máy học viên chưa dựng được Keycloak.
+            Bật bằng <code>COURSEFLOW_TRAINING_AUTH_BYPASS=true</code>.
+          </p>
+          <pre><code>1. Người học tạo session demo trong web localStorage hoặc app dev storage.
+2. Web/app gửi Authorization: Bearer training và X-Training-User-*.
+3. Gateway bỏ qua verify Keycloak vì COURSEFLOW_TRAINING_AUTH_BYPASS=true.
+4. Gateway vẫn xóa X-User-* giả mạo từ client.
+5. Gateway lấy X-Training-User-* để sinh internal identity trusted.
+6. Downstream service vẫn nhận CurrentUser và vẫn chạy authorization như bình thường.
+7. Forbidden/allowed evidence vẫn phải chứng minh qua API.</code></pre>
+          <div class="callout">
+            <strong>Điểm cần kiểm tra:</strong> training bypass chỉ được tồn tại ở edge/gateway.
+            Domain service không được tự đọc <code>X-Training-User-*</code> và không được bỏ qua authorization.
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Tài khoản demo</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Email</th>
+                <th>Password</th>
+                <th>Role</th>
+                <th>Dùng cho</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>1</code></td>
+                <td><code>admin@courseflow.local</code></td>
+                <td><code>password</code></td>
+                <td><code>ADMIN</code></td>
+                <td>Admin web, platform operations.</td>
+              </tr>
+              <tr>
+                <td><code>2</code></td>
+                <td><code>instructor@courseflow.local</code></td>
+                <td><code>password</code></td>
+                <td><code>INSTRUCTOR</code></td>
+                <td>Course authoring, assignment, quiz, gradebook.</td>
+              </tr>
+              <tr>
+                <td><code>4</code></td>
+                <td><code>student@courseflow.local</code></td>
+                <td><code>password</code></td>
+                <td><code>STUDENT</code></td>
+                <td>Learner web/mobile app, enrollment, progress, chat, quiz attempt.</td>
+              </tr>
+              <tr>
+                <td><code>5</code></td>
+                <td><code>student2@courseflow.local</code></td>
+                <td><code>password</code></td>
+                <td><code>STUDENT</code></td>
+                <td>Học viên phụ để demo roster, privacy và denied/self access.</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="panel">
+          <h2>Login web/app</h2>
+          <p>
+            Admin web: <code>http://localhost:5173/login</code>.
+            Learner web: <code>http://localhost:3000/login</code>.
+            Mobile app dùng cùng realm/client <code>courseflow-mobile</code> và gọi cùng gateway API.
+            Bấm “Tiếp tục với Keycloak” rồi đăng nhập bằng các tài khoản ở bảng trên.
+          </p>
+          <p>Fallback bypass cho admin web tại <code>http://localhost:5173</code>:</p>
+          <pre><code>localStorage.setItem("courseflow.admin.session", JSON.stringify({
+  accessToken: "training",
+  refreshToken: "",
+  user: {
+    id: 1,
+    email: "admin@courseflow.local",
+    fullName: "CourseFlow Admin",
+    role: "ADMIN",
+    status: "ACTIVE"
+  }
+}));
+location.href = "/dashboard";</code></pre>
+
+          <p>Fallback bypass cho learner web tại <code>http://localhost:3000</code>; mobile app dev mode dùng cùng header/token contract:</p>
+          <pre><code>localStorage.setItem("courseflow.learning.session", JSON.stringify({
+  accessToken: "training",
+  refreshToken: "",
+  user: {
+    id: 4,
+    email: "student@courseflow.local",
+    fullName: "Demo Learner",
+    role: "STUDENT",
+    status: "ACTIVE"
+  }
+}));
+location.reload();</code></pre>
+        </section>
+
+        <section class="panel">
+          <h2>Quy tắc SSO cùng browser</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Browser["Một browser profile"]
+  AdminWeb["Admin web<br/>client courseflow-admin-web"]
+  LearnerWeb["Learner web<br/>client courseflow-learner-web"]
+  MobileApp["Mobile app<br/>client courseflow-mobile"]
+  KC["Keycloak realm courseflow<br/>một SSO session active"]
+
+  Browser --> AdminWeb
+  Browser --> LearnerWeb
+  Browser --> MobileApp
+  AdminWeb --> KC
+  LearnerWeb --> KC
+  MobileApp --> KC
+  KC --> Browser
+            </div>
+          </div>
+          <ul>
+            <li>Cùng browser profile có thể mở admin web, learner web và app cùng lúc, nhưng chúng dùng chung SSO user trong realm <code>courseflow</code>.</li>
+            <li>Muốn test hai user khác nhau đồng thời, dùng browser profile khác nhau hoặc normal window + incognito.</li>
+            <li>Nếu đang login <code>admin@courseflow.local</code> rồi mở learner <code>/register</code>, Keycloak có thể báo <code>different_user_authenticated</code>. Đây là rule SSO đúng, không phải lỗi pod/frontend.</li>
+            <li>Admin tạo learner bằng <code>POST /api/admin/v1/users</code>; learner self-registration chỉ dành cho visitor chưa có SSO session của user khác.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Tạo tài khoản learner</h2>
+          <ol>
+            <li>Luồng backoffice: admin web gọi <code>POST /api/admin/v1/users</code>; gateway rewrite sang user-management <code>/backoffice/admin-users</code>.</li>
+            <li>User-management gọi Keycloak Admin API để tạo account với mật khẩu tạm thời hoặc setup-email nếu đã có SMTP.</li>
+            <li>User-management gọi access-control để link <code>issuer + subject</code>, gán role mặc định <code>STUDENT</code>, rồi tạo profile mặc định.</li>
+            <li>Luồng learner web: <code>/register</code> mở Keycloak registration bằng Authorization Code + PKCE.</li>
+            <li>User self-register login xong, gateway local-mode resolve/provision identity qua access-control và gán <code>STUDENT</code> nếu đây là lần đầu user xuất hiện.</li>
+            <li>Mọi client web/app sau đó gọi API bằng access token Keycloak; service chỉ tin internal JWT/trusted headers từ gateway.</li>
+          </ol>
+          <div class="callout">
+            <strong>Bài học chính:</strong> flow này thuộc Ngày 03 - User admin và profile.
+            Ngày 01 chỉ dạy login/current user với tài khoản seed; Ngày 02 dạy RBAC/permission; Ngày 03 ghép user lifecycle đầy đủ.
+          </div>
+          <div class="callout warn">
+            <strong>Cách test đúng:</strong> admin provision learner trên admin web trong browser thường.
+            Self-registration learner nên test bằng incognito/browser profile khác nếu browser thường đang login admin.
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Authorization evidence bắt buộc</h2>
+          <ol class="rubric">
+            <li>Unauthenticated/protected request bị chặn khi thiếu Keycloak session hoặc thiếu bearer token.</li>
+            <li>Student gọi admin endpoint phải bị <code>403 Forbidden</code>.</li>
+            <li>Instructor thao tác đúng course của mình được phép.</li>
+            <li>User không được tự gửi <code>X-User-Id</code> để giả danh người khác.</li>
+            <li>Endpoint nhạy cảm có audit/log quyết định quyền: subject, action, resource, reason.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Luồng dạy trong 18 ngày</h2>
+          <ul>
+            <li>Ngày 01: login Keycloak, gateway verify token, <code>GET /api/v1/users/me</code>.</li>
+            <li>Ngày 02: RBAC, protected admin API, trusted headers, audit allow/deny.</li>
+            <li>Ngày 03: profile/directory/status, phân biệt identity/auth với user profile.</li>
+            <li>Ngày 04-13: mọi feature có endpoint protected đều phải gọi quyền đúng nơi.</li>
+            <li>Ngày 14: manual evidence phải có cả happy path và forbidden path.</li>
+            <li>Ngày 15: demo giải thích được đường đi của token/header từ web tới service.</li>
+          </ul>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

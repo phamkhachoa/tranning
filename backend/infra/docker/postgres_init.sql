@@ -1,0 +1,21 @@
+CREATE DATABASE cf_access_control;
+CREATE DATABASE cf_user_management;
+CREATE DATABASE cf_course;
+CREATE DATABASE cf_enrollment;
+CREATE DATABASE cf_assignment;
+CREATE DATABASE cf_media;
+CREATE DATABASE cf_notification;
+CREATE DATABASE cf_gradebook;
+CREATE DATABASE cf_quiz;
+CREATE DATABASE cf_outbox;
+
+ALTER DATABASE cf_access_control OWNER TO courseflow;
+ALTER DATABASE cf_user_management OWNER TO courseflow;
+ALTER DATABASE cf_course OWNER TO courseflow;
+ALTER DATABASE cf_enrollment OWNER TO courseflow;
+ALTER DATABASE cf_assignment OWNER TO courseflow;
+ALTER DATABASE cf_media OWNER TO courseflow;
+ALTER DATABASE cf_notification OWNER TO courseflow;
+ALTER DATABASE cf_gradebook OWNER TO courseflow;
+ALTER DATABASE cf_quiz OWNER TO courseflow;
+ALTER DATABASE cf_outbox OWNER TO courseflow;

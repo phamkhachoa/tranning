@@ -1,0 +1,39 @@
+package edu.courseflow.course.repository;
+
+import edu.courseflow.course.model.ModuleItem;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+public interface ModuleItemJpaRepository extends JpaRepository<ModuleItem, UUID> {
+
+    // TRAINING(repo-day-07): Module detail/player query. Service decides whether the caller may see
+    // draft or only published items.
+    List<ModuleItem> findByModuleIdOrderByPositionAsc(UUID moduleId);
+
+    Optional<ModuleItem> findByIdAndModuleId(UUID id, UUID moduleId);
+
+    // TRAINING(repo-day-07): Learner player read model for published curriculum only.
+    // This is the repository side of GET /api/v1/courses/{courseId}/modules/player.
+    @Query("""
+            select i
+            from ModuleItem i, CourseModule m
+            where i.moduleId = m.id
+              and m.courseId = :courseId
+              and m.status = 'PUBLISHED'
+            order by m.position asc, i.position asc
+            """)
+    List<ModuleItem> findPublishedCourseItems(@Param("courseId") UUID courseId);
+
+    // TRAINING(repo-day-07): Position helper for item creation inside one module.
+    @Query("""
+            select coalesce(max(i.position), -1) + 1
+            from ModuleItem i
+            where i.moduleId = :moduleId
+              and i.status <> 'ARCHIVED'
+            """)
+    int nextPosition(@Param("moduleId") UUID moduleId);
+}

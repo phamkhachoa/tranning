@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 10 - Gradebook aggregation</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a class="active" href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 10: Gradebook aggregation</h2>
+          <p>Gom điểm assignment/quiz thành kết quả khóa học với quyền xem đúng.</p>
+          <div class="meta">
+            <span class="badge">Gradebook</span>
+            <span class="badge">Aggregation</span>
+            <span class="badge">Privacy</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  Assignment["assignment grade"] --> Upsert["upsert grade item"]
+  Quiz["quiz score"] --> Upsert
+  Upsert --> GradeDB[("gradebook DB")]
+  GradeDB --> Aggregate["weighted aggregation"]
+  Aggregate --> LearnerView["GET /api/v1/gradebook/me"]
+  Aggregate --> InstructorView["GET /api/admin/v1/gradebook"]
+  LearnerWeb["Learner web"] --> LearnerView
+  MobileApp["Mobile app"] --> LearnerView
+  AdminWeb["Admin/Instructor web"] --> InstructorView
+  LearnerView --> Privacy["only own grade"]
+  InstructorView --> CourseGuard["only teaching course"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Gradebook nhận điểm assignment và quiz.</li>
+            <li>Tính overall score theo weight tối giản.</li>
+            <li>Learner chỉ xem điểm của mình; instructor xem course mình dạy.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Đọc gradebook-service: grade entry, source type, final grade, visibility/privacy guards.</li>
+            <li>Chốt nguồn điểm: assignment-service grade, quiz-service attempt score; mỗi source có sourceId duy nhất để upsert idempotent.</li>
+            <li>Thiết kế grade item: courseId, studentId, sourceType, sourceId, score, maxScore, weight/category, gradedAt, updatedAt.</li>
+            <li>Implement upsert grade entry từ API/event: nếu cùng sourceType/sourceId/studentId thì update, không insert duplicate.</li>
+            <li>Recalculate course grade: weighted average nếu có weight, hoặc total score/maxScore nếu training muốn đơn giản; ghi rõ formula trong code/document.</li>
+            <li>Pass/fail rule: pass khi finalPercent >= threshold; threshold lấy từ course/gradebook config hoặc default rõ.</li>
+            <li>Learner endpoint <code>/api/v1/gradebook/me</code>: chỉ trả điểm của current user, không nhận studentId từ query cho learner.</li>
+            <li>Instructor endpoint course gradebook: check course staff access, paging/sort/filter student nếu cần.</li>
+            <li>Privacy: student không xem điểm student khác; admin/staff được xem theo course scope.</li>
+            <li>Handle missing grades: chưa nộp/chưa làm quiz hiển thị MISSING/PENDING, không tính như 0 nếu rule chưa đến hạn.</li>
+            <li>Notification integration: khi final grade hoặc submission grade thay đổi, phát event/notification ở ngày 11.</li>
+            <li>Evidence bắt buộc: assignment grade tạo grade entry, quiz score tạo grade entry, final grade đúng formula, student2 bị forbidden khi xem student1.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li>Assignment grade cập nhật vào gradebook.</li>
+            <li>Quiz score cập nhật vào gradebook.</li>
+            <li>Recalculate idempotent.</li>
+            <li>Student A không xem được grade của Student B.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>GET /api/v1/gradebook/me?courseId=&lt;course_id&gt;
+Authorization: Bearer &lt;student_token&gt;
+Expected: assignmentScore, quizScore, overallScore, passed
+
+GET /api/admin/v1/gradebook?courseId=&lt;course_id&gt;
+Authorization: Bearer &lt;instructor_token&gt;
+Expected: roster gradebook
+
+Negative:
+- student xem user khác -&gt; 403
+- recalculate 2 lần không duplicate item</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-09.html">Ngày 09 - Quiz</a>
+          <a href="day-11.html">Ngày 11 - Notification</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

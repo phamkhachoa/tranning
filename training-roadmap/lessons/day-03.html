@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ngày 03 - User admin và profile</title>
+  <link rel="stylesheet" href="../assets/roadmap.css" />
+  <script defer src="../assets/mermaid-init.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <h1>CourseFlow Mini</h1>
+      <p>Lộ trình implementation 18 ngày.</p>
+      <a href="../index.html">Tổng quan</a>
+      <a href="../system-overview.html">System Overview</a>
+      <a href="../api-contract.html">API Contract</a>
+      <a href="../auth-flow.html">Auth Flow</a>
+      <a href="../db-design-guide.html">DB Design</a>
+      <a href="../service-todo.html">Service TODO</a>
+      <a href="day-01.html">Ngày 01 - Auth/Profile</a>
+      <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+      <a class="active" href="day-03.html">Ngày 03 - User Admin</a>
+      <a href="day-04.html">Ngày 04 - Course CRUD</a>
+      <a href="day-05.html">Ngày 05 - Publish</a>
+      <a href="day-06.html">Ngày 06 - Enrollment</a>
+      <a href="day-07.html">Ngày 07 - Progress</a>
+      <a href="day-08.html">Ngày 08 - Assignment</a>
+      <a href="day-09.html">Ngày 09 - Quiz</a>
+      <a href="day-10.html">Ngày 10 - Gradebook</a>
+      <a href="day-11.html">Ngày 11 - Notification</a>
+      <a href="day-12.html">Ngày 12 - Chat</a>
+      <a href="day-13.html">Ngày 13 - Search</a>
+      <a href="day-14.html">Ngày 14 - Integration QA</a>
+      <a href="day-15.html">Ngày 15 - Demo Review</a>
+      <a href="day-16.html">Ngày 16 - Observability</a>
+      <a href="day-17.html">Ngày 17 - Cache/Resilience</a>
+      <a href="day-18.html">Ngày 18 - API Contract</a>
+    </aside>
+    <main class="content">
+      <div class="page">
+        <section class="hero">
+          <h2>Ngày 03: User admin và profile</h2>
+          <p>Hoàn thiện user/profile như hầu hết hệ thống đều cần: xem mình, sửa profile, admin search, deactivate.</p>
+          <div class="meta">
+            <span class="badge">User Management</span>
+            <span class="badge">Validation</span>
+            <span class="badge">Directory</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Sơ đồ impl</h2>
+          <div class="diagram-scroll">
+            <div class="mermaid">
+flowchart LR
+  LearnerWeb["Learner web"] --> GW["Gateway + CurrentUser"]
+  MobileApp["Mobile app"] --> GW
+  AdminWeb["Admin web"] --> GW
+  subgraph APIs["User APIs"]
+    Me["GET /api/v1/users/me"]
+    Update["PUT /api/v1/users/me/profile"]
+    Provision["POST /api/admin/v1/users<br/>invite/provision learner"]
+    AdminList["GET /api/admin/v1/users"]
+    Status["deactivate/reactivate"]
+  end
+  GW --> APIs
+  APIs --> Service["UserProfileService<br/>validation + status rules"]
+  Provision --> KC["Keycloak Admin API<br/>create user / setup email"]
+  Provision --> Access["access-control<br/>link identity + role STUDENT"]
+  Service --> Repo["ProfileRepository"]
+  Repo --> DB[("user_management DB")]
+  Service --> Response["DTO không leak auth fields"]
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Mục tiêu</h2>
+          <ul>
+            <li>Learner cập nhật được profile của chính mình.</li>
+            <li>Admin tạo/mời được learner mới theo flow Keycloak + access-control + profile.</li>
+            <li>Admin list/search user có paging.</li>
+            <li>Admin deactivate/reactivate user theo rule rõ.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Hai luồng tạo tài khoản</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Luồng</th>
+                <th>Khi nào dùng</th>
+                <th>API/entrypoint</th>
+                <th>Kết quả bắt buộc</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Admin provision</td>
+                <td>Backoffice tạo learner cho lớp/course.</td>
+                <td><code>POST /api/admin/v1/users</code></td>
+                <td>Keycloak account, access-control identity link, role <code>STUDENT</code>, profile trong user-management.</td>
+              </tr>
+              <tr>
+                <td>Self-registration</td>
+                <td>Visitor tự tạo learner account ở learner web/mobile.</td>
+                <td><code>http://localhost:3000/register</code> -> Keycloak registration</td>
+                <td>Keycloak account, gateway auto-provision access-control identity, role <code>STUDENT</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="callout warn">
+            <strong>Rule SSO khi test:</strong> nếu browser thường đang login admin thì test self-registration bằng incognito/browser profile khác.
+            Cùng browser profile trong cùng realm <code>courseflow</code> chỉ có một SSO user active.
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>Cách impl</h2>
+          <ol>
+            <li>Đọc model user/profile/status trong user-management-service; phân biệt account identity từ Keycloak với profile/directory data trong app.</li>
+            <li>Chốt chính sách tạo tài khoản: mini stack có hai luồng chuẩn, admin provision ở admin web và self-registration ở learner web qua Keycloak.</li>
+            <li>Thiết kế request tối thiểu cho admin tạo learner: email, fullName, temporaryPassword, requirePasswordChange, sendSetupEmail; không cho client tự gửi userId hoặc role tuỳ ý.</li>
+            <li>Implement hoặc hoàn thiện flow admin provision: tạo user ở Keycloak, gọi access-control để link issuer+subject và gán role STUDENT, tạo profile mặc định trong user-management-service, trả DTO không chứa password/token.</li>
+            <li>Implement hoặc kiểm tra flow learner self-registration: Keycloak tạo account, callback về learner web, gateway resolve/provision identity lần đầu qua access-control và gán STUDENT.</li>
+            <li>Chốt status lifecycle tối thiểu: <code>ACTIVE</code>, <code>DISABLED</code>; nếu có <code>PENDING</code>/<code>LOCKED</code> thì chỉ dùng khi đã có rule rõ.</li>
+            <li>Thiết kế API admin list/search users: filter q/email/status/role, paging, sort ổn định; không trả toàn bộ dataset không giới hạn.</li>
+            <li>Implement repository query bằng index-friendly condition; với search user directory nhỏ có thể dùng DB query, nhưng tránh trả field nhạy cảm.</li>
+            <li>Thêm hoặc kiểm tra index DB cho email/status/displayName nếu list/search cần dùng thường xuyên; migration có tên rõ và rollback note.</li>
+            <li>Implement deactivate/activate user: admin-only, không cho admin tự disable chính mình nếu đó là admin cuối cùng trong hệ thống demo.</li>
+            <li>Khi disable user, cập nhật status trong user-management-service; Keycloak disable có thể là phase sau, nhưng tài liệu evidence phải nói rõ boundary hiện tại.</li>
+            <li>Implement learner update profile: chỉ user tự sửa profile của mình; admin update profile người khác nếu có endpoint riêng thì phải check permission.</li>
+            <li>Validate unique email nếu service quản lý email; nếu email lấy từ Keycloak thì không cho sửa email qua profile API.</li>
+            <li>Chuẩn hóa DTO: admin list có role/status; learner profile chỉ có thông tin public cần hiển thị.</li>
+            <li>Xử lý lỗi: user không tồn tại 404, status transition sai 400, student gọi admin endpoint 403, duplicate email 409.</li>
+            <li>Evidence bắt buộc: admin tạo learner mới, learner xuất hiện trong Keycloak và admin user list, learner login được bằng password tạm thời, self-registration pass trong incognito/profile khác, admin search user, disable student2, student2 gọi API bị chặn hoặc status DISABLED, student update profile và read-back đúng.</li>
+          </ol>
+        </section>
+
+        <section class="panel">
+          <h2>Kết quả cần đạt</h2>
+          <ul>
+            <li><code>GET /api/v1/users/me</code> chạy ổn sau login.</li>
+            <li><code>POST /api/admin/v1/users</code> tạo hoặc mời learner mới theo boundary Keycloak/access-control/user-management.</li>
+            <li><code>PUT /api/v1/users/me/profile</code> cập nhật display name/avatar/bio.</li>
+            <li><code>GET /api/admin/v1/users?q=...</code> trả paging đúng.</li>
+            <li>User inactive không được coi là active learner trong các feature sau.</li>
+          </ul>
+        </section>
+
+        <section class="panel">
+          <h2>Evidence</h2>
+          <pre><code>POST /api/admin/v1/users
+Authorization: Bearer &lt;admin_token&gt;
+Body: {
+  "email": "learner01@courseflow.local",
+  "fullName": "Learner 01",
+  "temporaryPassword": "password",
+  "requirePasswordChange": false,
+  "sendSetupEmail": false
+}
+Expected: 201, user ACTIVE, role STUDENT
+
+Login learner web bằng learner01@courseflow.local/password
+Expected: vào dashboard, GET /api/v1/users/me trả đúng user
+
+Self-registration:
+- Mở incognito hoặc browser profile khác nếu browser thường đang login admin.
+- Vào http://localhost:3000/register.
+- Đăng ký user mới qua Keycloak.
+Expected: callback về learner web, user có role STUDENT trong access-control.
+
+PUT /api/v1/users/me/profile
+Authorization: Bearer &lt;student_token&gt;
+Body: {"displayName":"Demo Learner","bio":"Learning Java"}
+Expected: 200, data cập nhật
+
+GET /api/admin/v1/users?q=student&amp;page=0&amp;size=10
+Authorization: Bearer &lt;admin_token&gt;
+Expected: có student, có paging metadata
+
+Negative:
+- displayName quá dài -&gt; 400
+- duplicate email khi admin tạo learner -&gt; 409 hoặc lỗi rõ từ Keycloak/user-management
+- student gọi admin list -&gt; 403</code></pre>
+        </section>
+
+        <nav class="lesson-nav">
+          <a href="day-02.html">Ngày 02 - RBAC/Gateway</a>
+          <a href="day-04.html">Ngày 04 - Course CRUD</a>
+        </nav>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

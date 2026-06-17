@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Single master changelog for enrollment-service.
+  Add a new migration by dropping a NNN-*.sql under db/changelog/changes/ and
+  registering it here as a new <include>. Keep includes in numeric order.
+-->
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.27.xsd">
+
+    <include file="db/changelog/changes/001-init.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/002-promotion-applications.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/003-promotion-application-reversed-status.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/004-checkout-attempts.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/005-promotion-application-retry-schedule.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/006-paid-checkout-remediation.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/007-order-payment-reference-guards.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/008-remediation-open-case-dedupe.sql" relativeToChangelogFile="false"/>
+    <include file="db/changelog/changes/009-remediation-ops-filter-indexes.sql" relativeToChangelogFile="false"/>
+</databaseChangeLog>
