@@ -1,0 +1,13 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      routes:
+        - id: news-service-route
+          uri: http://localhost:8081  # Double check if your news service runs on 8081
+          predicates:
+            - Path=/news/**, /v3/api-docs/**, /swagger-ui/**
