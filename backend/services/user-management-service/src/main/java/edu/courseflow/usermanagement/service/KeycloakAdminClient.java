@@ -15,6 +15,8 @@ public interface KeycloakAdminClient {
 
     KeycloakUser getUser(String keycloakUserId);
 
+    void enableUser(String keycloakUserId);
+
     void disableUser(String keycloakUserId);
 
     void logoutUser(String keycloakUserId);

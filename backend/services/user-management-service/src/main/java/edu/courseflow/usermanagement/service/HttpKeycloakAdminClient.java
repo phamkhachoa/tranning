@@ -116,6 +116,13 @@ public class HttpKeycloakAdminClient implements KeycloakAdminClient {
     }
 
     @Override
+    public void enableUser(String keycloakUserId) {
+        Map<String, Object> user = getUserRepresentation(keycloakUserId);
+        user.put("enabled", true);
+        updateUser(keycloakUserId, user);
+    }
+
+    @Override
     public void disableUser(String keycloakUserId) {
         Map<String, Object> user = getUserRepresentation(keycloakUserId);
         user.put("enabled", false);
@@ -214,6 +221,9 @@ public class HttpKeycloakAdminClient implements KeycloakAdminClient {
         HttpStatus status = HttpStatus.resolve(ex.getStatusCode().value());
         if (status == null) {
             status = HttpStatus.BAD_GATEWAY;
+        }
+        if (status == HttpStatus.CONFLICT) {
+            return new ResponseStatusException(HttpStatus.CONFLICT, "Keycloak user already exists");
         }
         if (status.is5xxServerError()) {
             status = HttpStatus.BAD_GATEWAY;

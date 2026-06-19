@@ -294,7 +294,7 @@ public class TrustedGatewayHeaderFilter extends OncePerRequestFilter {
                     ? InternalScopes.ROLE_ASSIGNMENT_READ
                     : InternalScopes.ROLE_ASSIGNMENT_WRITE);
         }
-        if (path.endsWith("/deactivate")) {
+        if (path.endsWith("/deactivate") || path.endsWith("/reactivate")) {
             return Set.of(InternalScopes.USER_DIRECTORY_WRITE);
         }
         if (path.endsWith(":batch") || "GET".equalsIgnoreCase(method)) {

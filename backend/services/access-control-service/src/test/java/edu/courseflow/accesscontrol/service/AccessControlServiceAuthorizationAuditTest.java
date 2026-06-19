@@ -12,6 +12,7 @@ import edu.courseflow.accesscontrol.dto.AccessControlDtos.AssignRoleRequestDto;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.AuthzCheckRequestDto;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.AuthzScopeDto;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.ProvisionKeycloakUserRequest;
+import edu.courseflow.accesscontrol.dto.AccessControlDtos.ReactivateAccessUserRequest;
 import edu.courseflow.accesscontrol.model.AccessControlAuditLog;
 import edu.courseflow.accesscontrol.model.AccessUser;
 import edu.courseflow.accesscontrol.model.Permission;
@@ -388,6 +389,36 @@ class AccessControlServiceAuthorizationAuditTest {
                 .hasMessageContaining("platform:admin");
 
         verify(users, never()).findById(42L);
+    }
+
+    @Test
+    void reactivatesAccessUserWithAudit() {
+        AccessControlService accessControl = service(false);
+        AccessUser adminUser = new AccessUser(1L, "admin@courseflow.local");
+        AccessUser deactivated = new AccessUser(42L, "learner@courseflow.local");
+        deactivated.deactivate();
+        Role admin = role("ADMIN");
+        when(permissions.findById("platform:admin")).thenReturn(Optional.of(permissionDefinition(
+                "platform:admin", "PLATFORM")));
+        when(assignments.findActiveByUserId(eq(1L), any(Instant.class)))
+                .thenReturn(List.of(new UserRoleAssignment(adminUser, admin, "PLATFORM", null, "seed", null)));
+        when(grants.findByRole_IdOrderByPermission_CategoryAscPermission_CodeAsc(admin.getId()))
+                .thenReturn(List.of(grant(admin, "platform:admin", "ALLOW")));
+        when(users.findById(42L)).thenReturn(Optional.of(deactivated));
+        when(identityLinks.findFirstByUser_IdAndStatusOrderByIdDesc(42L, "ACTIVE")).thenReturn(Optional.empty());
+        when(assignments.findActiveByUserId(eq(42L), any(Instant.class))).thenReturn(List.of());
+
+        var result = accessControl.reactivateUser(
+                42L,
+                new ReactivateAccessUserRequest("appeal approved"),
+                new CurrentUser(1L, "admin@courseflow.local", "ADMIN"));
+
+        assertThat(result.status()).isEqualTo("ACTIVE");
+        assertThat(deactivated.getTokensValidAfter()).isNotNull();
+        AccessControlAuditLog audit = captureAudit();
+        assertThat(audit.getEventType()).isEqualTo("ACCESS_USER_REACTIVATED");
+        assertThat(audit.getActorId()).isEqualTo("user:1");
+        assertThat(audit.getDetail()).contains("reason=appeal approved");
     }
 
     @Test

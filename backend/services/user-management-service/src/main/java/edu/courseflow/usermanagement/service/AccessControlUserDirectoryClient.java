@@ -84,6 +84,16 @@ public class AccessControlUserDirectoryClient {
                 .body(AccessUserDirectoryItem.class);
     }
 
+    public AccessUserDirectoryItem reactivate(long userId, String reason) {
+        return client.post()
+                .uri("/internal/users/{userId}/reactivate", userId)
+                .headers(headers -> internalJwt.applyServiceToken(
+                        headers, Set.of(InternalScopes.USER_DIRECTORY_WRITE)))
+                .body(new ReactivateAccessUserRequest(reason))
+                .retrieve()
+                .body(AccessUserDirectoryItem.class);
+    }
+
     public List<RoleGrantExport> exportAssignments(long userId) {
         return client.get()
                 .uri("/internal/users/{userId}/assignments:export", userId)
@@ -142,6 +152,9 @@ public class AccessControlUserDirectoryClient {
     }
 
     private record DeactivateAccessUserRequest(String reason) {
+    }
+
+    private record ReactivateAccessUserRequest(String reason) {
     }
 
     private record AuthzCheckRequest(String userId, String permission, String scopeType, String scopeId) {

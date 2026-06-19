@@ -34,6 +34,29 @@ class GatewayRouteConfigurationTest {
     }
 
     @Test
+    void adminUserLifecycleRouteIncludesReactivateActionPath() {
+        Map<String, Object> root = loadGatewayApplicationYaml();
+        List<Map<String, Object>> routes = routes(root);
+        Map<String, Object> route = routes.stream()
+                .filter(candidate -> "user-management-admin-users-lifecycle".equals(candidate.get("id")))
+                .findFirst()
+                .orElseThrow();
+
+        @SuppressWarnings("unchecked")
+        List<String> predicates = (List<String>) route.get("predicates");
+        @SuppressWarnings("unchecked")
+        List<String> filters = (List<String>) route.get("filters");
+
+        assertThat(predicates).anySatisfy(predicate -> assertThat(predicate)
+                .contains("/api/admin/v1/users/*/privacy-export")
+                .contains("/api/admin/v1/users/*/deactivate")
+                .contains("/api/admin/v1/users/*/reactivate"));
+        assertThat(filters).anySatisfy(filter -> assertThat(filter)
+                .contains("privacy-export|deactivate|reactivate")
+                .contains("/backoffice/admin-users/$\\{userId}/$\\{action}"));
+    }
+
+    @Test
     void routesDefaultToDiscoveryBackedUris() {
         Map<String, Object> root = loadGatewayApplicationYaml();
         List<Map<String, Object>> routes = routes(root);

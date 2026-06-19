@@ -84,6 +84,11 @@ public class AccessUser {
         invalidateTokens();
     }
 
+    public void reactivate() {
+        this.status = "ACTIVE";
+        invalidateTokens();
+    }
+
     private void touch() {
         this.updatedAt = Instant.now();
     }

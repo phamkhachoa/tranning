@@ -13,6 +13,7 @@ import edu.courseflow.accesscontrol.dto.AccessControlDtos.PermissionDto;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.PermissionGrantDto;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.ProvisionIdentityRequest;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.ProvisionKeycloakUserRequest;
+import edu.courseflow.accesscontrol.dto.AccessControlDtos.ReactivateAccessUserRequest;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.ResolveIdentityRequest;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.ResolvedIdentityDto;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.RoleAssignmentDto;
@@ -106,6 +107,13 @@ public class AccessControlController {
             @Valid @RequestBody DeactivateAccessUserRequest request,
             CurrentUser caller) {
         return accessControl.deactivateUser(userId, request, caller);
+    }
+
+    @PostMapping("/internal/users/{userId}/reactivate")
+    public AccessUserDirectoryItemDto reactivateUser(@PathVariable Long userId,
+            @Valid @RequestBody ReactivateAccessUserRequest request,
+            CurrentUser caller) {
+        return accessControl.reactivateUser(userId, request, caller);
     }
 
     @PostMapping("/internal/users/summary:batch")

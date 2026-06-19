@@ -42,9 +42,9 @@ spring:
         - id: user-management-admin-users-lifecycle
           uri: ${USER_MANAGEMENT_SERVICE_URI:lb://user-management-service}
           predicates:
-            - Path=/api/admin/v1/users/*/privacy-export,/api/admin/v1/users/*/deactivate
+            - Path=/api/admin/v1/users/*/privacy-export,/api/admin/v1/users/*/deactivate,/api/admin/v1/users/*/reactivate
           filters:
-            - RewritePath=/api/admin/v1/users/(?<userId>[^/]+)/(?<action>privacy-export|deactivate)$, /backoffice/admin-users/$\{userId}/$\{action}
+            - RewritePath=/api/admin/v1/users/(?<userId>[^/]+)/(?<action>privacy-export|deactivate|reactivate)$, /backoffice/admin-users/$\{userId}/$\{action}
 
         - id: user-management-admin-users-detail
           uri: ${USER_MANAGEMENT_SERVICE_URI:lb://user-management-service}

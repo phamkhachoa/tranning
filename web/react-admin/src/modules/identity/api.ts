@@ -91,3 +91,8 @@ export async function deactivateUser(id: string, reason: string): Promise<AdminU
   const { data } = await apiClient.post(`/admin/v1/users/${id}/deactivate`, { reason });
   return unwrap<AdminUser>(data);
 }
+
+export async function reactivateUser(id: string, reason: string): Promise<AdminUser> {
+  const { data } = await apiClient.post(`/admin/v1/users/${id}/reactivate`, { reason });
+  return unwrap<AdminUser>(data);
+}

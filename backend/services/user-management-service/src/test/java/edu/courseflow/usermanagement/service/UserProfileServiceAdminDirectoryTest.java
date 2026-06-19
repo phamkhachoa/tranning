@@ -2,6 +2,7 @@ package edu.courseflow.usermanagement.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import edu.courseflow.commonlibrary.exception.ForbiddenException;
@@ -9,6 +10,7 @@ import edu.courseflow.commonlibrary.exception.NotFoundException;
 import edu.courseflow.commonlibrary.web.CurrentUser;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.CreateAdminUserRequest;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.DeactivateAdminUserRequest;
+import edu.courseflow.usermanagement.dto.UserProfileDtos.ReactivateAdminUserRequest;
 import edu.courseflow.usermanagement.model.UserProfile;
 import edu.courseflow.usermanagement.repository.UserProfileAuditLogRepository;
 import edu.courseflow.usermanagement.repository.UserProfileRepository;
@@ -207,6 +209,27 @@ class UserProfileServiceAdminDirectoryTest {
     }
 
     @Test
+    void adminDirectoryPageReturnsRequestedWindowAndHasNextFlag() {
+        CurrentUser admin = admin();
+        allowPlatformAdmin(admin);
+        when(accessDirectory.list(null, 5)).thenReturn(List.of(
+                new AccessUserDirectoryItem("1", "one@example.com", "ACTIVE", "STUDENT", "issuer", "subject-1"),
+                new AccessUserDirectoryItem("2", "two@example.com", "ACTIVE", "STUDENT", "issuer", "subject-2"),
+                new AccessUserDirectoryItem("3", "three@example.com", "ACTIVE", "STUDENT", "issuer", "subject-3"),
+                new AccessUserDirectoryItem("4", "four@example.com", "ACTIVE", "STUDENT", "issuer", "subject-4"),
+                new AccessUserDirectoryItem("5", "five@example.com", "ACTIVE", "STUDENT", "issuer", "subject-5")));
+        when(profiles.findByUserIdInOrderByUserIdAsc(List.of(1L, 2L, 3L, 4L, 5L))).thenReturn(List.of());
+
+        var page = service.adminDirectoryPage(admin, null, 1, 2);
+
+        assertThat(page.page()).isEqualTo(1);
+        assertThat(page.size()).isEqualTo(2);
+        assertThat(page.returned()).isEqualTo(2);
+        assertThat(page.hasNext()).isTrue();
+        assertThat(page.items()).extracting("id").containsExactly(3L, 4L);
+    }
+
+    @Test
     void createAdminUserDelegatesIamToKeycloakAndProvisioningToAccessControl() {
         CurrentUser admin = admin();
         allowPlatformAdmin(admin);
@@ -279,6 +302,29 @@ class UserProfileServiceAdminDirectoryTest {
         var deactivated = service.deactivateAdminUser(admin, 42L, new DeactivateAdminUserRequest("left company"));
 
         assertThat(deactivated.status()).isEqualTo("DEACTIVATED");
+    }
+
+    @Test
+    void reactivateAdminUserEnablesKeycloakAndAccessControl() {
+        CurrentUser admin = admin();
+        allowPlatformAdmin(admin);
+        when(accessDirectory.get(42L)).thenReturn(
+                new AccessUserDirectoryItem("42", "learner@example.com", "DEACTIVATED", "STUDENT", "issuer", "kc-42"),
+                new AccessUserDirectoryItem("42", "learner@example.com", "ACTIVE", "STUDENT", "issuer", "kc-42"));
+        when(profiles.findById(42L)).thenReturn(Optional.of(new UserProfile(
+                42L,
+                "Learner Forty Two",
+                null,
+                null,
+                "vi-VN",
+                "Asia/Ho_Chi_Minh",
+                "ORG")));
+
+        var reactivated = service.reactivateAdminUser(admin, 42L, new ReactivateAdminUserRequest("appeal approved"));
+
+        assertThat(reactivated.status()).isEqualTo("ACTIVE");
+        verify(keycloak).enableUser("kc-42");
+        verify(accessDirectory).reactivate(42L, "appeal approved");
     }
 
     @Test

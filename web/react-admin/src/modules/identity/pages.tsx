@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Download, Plus, ShieldAlert, UserX } from "lucide-react";
+import { ArrowLeft, Download, Plus, RotateCcw, ShieldAlert, UserX } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/shared/api/query-keys";
 import {
@@ -25,6 +25,7 @@ import {
   downloadUserPrivacyExport,
   getUser,
   listUsers,
+  reactivateUser,
   type CreateUserInput
 } from "./api";
 
@@ -89,6 +90,7 @@ export function UserDetailPage() {
   const { id = "" } = useParams();
   const qc = useQueryClient();
   const [deactivationReason, setDeactivationReason] = useState("");
+  const [reactivationReason, setReactivationReason] = useState("");
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.users.detail(id),
     queryFn: () => getUser(id),
@@ -103,6 +105,14 @@ export function UserDetailPage() {
       qc.setQueryData(queryKeys.users.detail(id), user);
       qc.invalidateQueries({ queryKey: queryKeys.users.all });
       setDeactivationReason("");
+    }
+  });
+  const reactivate = useMutation({
+    mutationFn: () => reactivateUser(id, reactivationReason.trim()),
+    onSuccess: (user) => {
+      qc.setQueryData(queryKeys.users.detail(id), user);
+      qc.invalidateQueries({ queryKey: queryKeys.users.all });
+      setReactivationReason("");
     }
   });
 
@@ -196,6 +206,44 @@ export function UserDetailPage() {
               {isDeactivated ? "Đã deactivate" : deactivate.isPending ? "Đang deactivate" : "Deactivate user"}
             </Button>
           </form>
+          {isDeactivated && (
+            <form
+              className="space-y-4 border-t border-slate-100 p-4"
+              onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                event.preventDefault();
+                reactivate.mutate();
+              }}
+            >
+              <FormField
+                label="Lý do reactivation"
+                htmlFor="reactivate-reason"
+                hint="Bắt buộc để khôi phục login và ghi audit trail."
+              >
+                <Textarea
+                  id="reactivate-reason"
+                  value={reactivationReason}
+                  maxLength={255}
+                  onChange={(event) => setReactivationReason(event.target.value)}
+                  placeholder="Ví dụ: Appeal approved after identity verification."
+                  required
+                />
+              </FormField>
+              {reactivate.isError && <ErrorState error={reactivate.error} />}
+              {reactivate.isSuccess && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">
+                  Đã reactivate tài khoản và mở lại login qua Keycloak.
+                </div>
+              )}
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={reactivate.isPending || !reactivationReason.trim()}
+              >
+                <RotateCcw size={16} />
+                {reactivate.isPending ? "Đang reactivate" : "Reactivate user"}
+              </Button>
+            </form>
+          )}
         </Card>
       </div>
     </div>
