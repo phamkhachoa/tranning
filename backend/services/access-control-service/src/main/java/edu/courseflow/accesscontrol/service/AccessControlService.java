@@ -13,6 +13,7 @@ import edu.courseflow.accesscontrol.dto.AccessControlDtos.PermissionDto;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.PermissionGrantDto;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.ProvisionIdentityRequest;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.ProvisionKeycloakUserRequest;
+import edu.courseflow.accesscontrol.dto.AccessControlDtos.ReactivateAccessUserRequest;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.ResolveIdentityRequest;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.ResolvedIdentityDto;
 import edu.courseflow.accesscontrol.dto.AccessControlDtos.ResolvedRoleAssignmentDto;
@@ -411,7 +412,7 @@ public class AccessControlService {
     @Transactional(readOnly = true)
     public List<AccessUserDirectoryItemDto> userDirectory(String query, int limit, CurrentUser caller) {
         requireUserDirectoryReadForUserCaller(caller);
-        int boundedLimit = Math.max(1, Math.min(limit, 200));
+        int boundedLimit = Math.max(1, Math.min(limit, 1000));
         String needle = query == null || query.isBlank() ? "" : query.trim().toLowerCase(Locale.ROOT);
         return users.searchDirectory(needle, PageRequest.of(0, boundedLimit)).stream()
                 .map(this::toDirectoryItem)
@@ -456,6 +457,21 @@ public class AccessControlService {
         user.deactivate();
         assignments.findLiveByUserId(userId).forEach(assignment -> assignment.revoke(actor));
         audit("ACCESS_USER_DEACTIVATED", user, actor, true, detail("reason=", reason));
+        return toDirectoryItem(user);
+    }
+
+    @Transactional
+    public AccessUserDirectoryItemDto reactivateUser(long userId, ReactivateAccessUserRequest request,
+            CurrentUser caller) {
+        requirePlatformAdministrationForUserCaller(caller);
+        AccessUser user = ensureUserExists(userId);
+        if ("ACTIVE".equals(user.getStatus())) {
+            throw new BadRequestException("USER_ALREADY_ACTIVE");
+        }
+        String actor = callerTag(caller);
+        String reason = normalizeRequired(request.reason(), "reason");
+        user.reactivate();
+        audit("ACCESS_USER_REACTIVATED", user, actor, true, detail("reason=", reason));
         return toDirectoryItem(user);
     }
 

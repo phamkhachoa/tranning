@@ -69,6 +69,14 @@ public final class UserProfileDtos {
             String status) {
     }
 
+    public record AdminUserPageDto(
+            List<AdminUserDto> items,
+            int page,
+            int size,
+            int returned,
+            boolean hasNext) {
+    }
+
     public record CurrentUserDto(
             Long id,
             String email,
@@ -89,6 +97,10 @@ public final class UserProfileDtos {
     }
 
     public record DeactivateAdminUserRequest(
+            @NotBlank @Size(max = 255) String reason) {
+    }
+
+    public record ReactivateAdminUserRequest(
             @NotBlank @Size(max = 255) String reason) {
     }
 

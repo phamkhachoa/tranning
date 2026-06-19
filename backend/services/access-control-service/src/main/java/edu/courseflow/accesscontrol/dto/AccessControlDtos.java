@@ -75,6 +75,10 @@ public final class AccessControlDtos {
             @NotBlank @Size(max = 255) String reason) {
     }
 
+    public record ReactivateAccessUserRequest(
+            @NotBlank @Size(max = 255) String reason) {
+    }
+
     public record AccessRoleGrantExportDto(
             Long id,
             String roleId,

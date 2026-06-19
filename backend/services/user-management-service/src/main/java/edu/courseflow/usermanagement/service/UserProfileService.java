@@ -7,11 +7,13 @@ import edu.courseflow.commonlibrary.web.CurrentUser;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.AccountSecuritySnapshotDto;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.AdminUserPrivacyExportDto;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.AdminUserDto;
+import edu.courseflow.usermanagement.dto.UserProfileDtos.AdminUserPageDto;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.CreateAdminUserRequest;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.CurrentUserDto;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.DeactivateAdminUserRequest;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.ProfileSummaryDto;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.ProvisionUserProfileRequest;
+import edu.courseflow.usermanagement.dto.UserProfileDtos.ReactivateAdminUserRequest;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.RoleGrantExportDto;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.UpdateMyProfileRequest;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.UserDirectoryItemDto;
@@ -189,7 +191,7 @@ public class UserProfileService {
     @Transactional(readOnly = true)
     public List<AdminUserDto> adminDirectory(CurrentUser caller, String query, int limit) {
         requirePlatformAdmin(caller);
-        int boundedLimit = Math.max(1, Math.min(limit, 200));
+        int boundedLimit = Math.max(1, Math.min(limit, 1000));
         Map<Long, AccessUserDirectoryItem> accessById = new LinkedHashMap<>();
         for (AccessUserDirectoryItem item : nullSafe(accessDirectory.list(query, boundedLimit))) {
             putAccessUser(accessById, item);
@@ -217,6 +219,18 @@ public class UserProfileService {
         return accessById.values().stream()
                 .map(item -> toAdminUserDto(item, profileById.get(parseUserId(item.userId()))))
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AdminUserPageDto adminDirectoryPage(CurrentUser caller, String query, Integer page, Integer size) {
+        int normalizedPage = normalizePage(page);
+        int normalizedSize = normalizePageSize(size);
+        int fetchLimit = Math.min(1000, ((normalizedPage + 1) * normalizedSize) + 1);
+        List<AdminUserDto> merged = adminDirectory(caller, query, fetchLimit);
+        int from = Math.min(normalizedPage * normalizedSize, merged.size());
+        int to = Math.min(from + normalizedSize, merged.size());
+        List<AdminUserDto> items = merged.subList(from, to);
+        return new AdminUserPageDto(items, normalizedPage, normalizedSize, items.size(), merged.size() > to);
     }
 
     @Transactional(readOnly = true)
@@ -302,6 +316,36 @@ public class UserProfileService {
         return adminUserRecord(userId);
     }
 
+    @Transactional
+    public AdminUserDto reactivateAdminUser(CurrentUser caller, long userId, ReactivateAdminUserRequest request) {
+        requirePlatformAdmin(caller);
+        String reason = normalizeRequired(request.reason(), "reason");
+        AccessUserDirectoryItem accessUser = accessDirectory.get(userId);
+        if (accessUser == null || accessUser.userId() == null || accessUser.userId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "access-control returned no user");
+        }
+        if ("ACTIVE".equalsIgnoreCase(accessUser.status())) {
+            throw new BadRequestException("USER_ALREADY_ACTIVE");
+        }
+        if (accessUser.externalSubject() == null || accessUser.externalSubject().isBlank()) {
+            throw new BadRequestException("KEYCLOAK_IDENTITY_LINK_REQUIRED");
+        }
+        keycloak.enableUser(accessUser.externalSubject());
+        try {
+            accessDirectory.reactivate(userId, reason);
+        } catch (RuntimeException ex) {
+            try {
+                keycloak.disableUser(accessUser.externalSubject());
+            } catch (RuntimeException cleanupFailure) {
+                ex.addSuppressed(cleanupFailure);
+            }
+            throw ex;
+        }
+        profiles.findById(userId).ifPresent(profile -> audit(profile, caller, "ADMIN_USER_REACTIVATED",
+                detail("reason=", reason)));
+        return adminUserRecord(userId);
+    }
+
     @Transactional(readOnly = true)
     public AdminUserPrivacyExportDto exportAdminUserPrivacy(CurrentUser caller, long userId) {
         requirePlatformAdmin(caller);
@@ -364,6 +408,26 @@ public class UserProfileService {
             throw new BadRequestException("INVALID_USER_ID");
         }
         throw new BadRequestException("INVALID_USER_ID");
+    }
+
+    private int normalizePage(Integer raw) {
+        if (raw == null) {
+            return 0;
+        }
+        if (raw < 0) {
+            throw new BadRequestException("INVALID_PAGE");
+        }
+        return raw;
+    }
+
+    private int normalizePageSize(Integer raw) {
+        if (raw == null) {
+            return 10;
+        }
+        if (raw < 1 || raw > 200) {
+            throw new BadRequestException("INVALID_PAGE_SIZE");
+        }
+        return raw;
     }
 
     private String normalizeRequired(String raw, String field) {

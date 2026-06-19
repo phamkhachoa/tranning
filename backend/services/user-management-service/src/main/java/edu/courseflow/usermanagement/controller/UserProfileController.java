@@ -9,6 +9,7 @@ import edu.courseflow.usermanagement.dto.UserProfileDtos.DeactivateAdminUserRequ
 import edu.courseflow.usermanagement.dto.UserProfileDtos.ProfileSummaryBatchRequest;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.ProfileSummaryDto;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.ProvisionUserProfileRequest;
+import edu.courseflow.usermanagement.dto.UserProfileDtos.ReactivateAdminUserRequest;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.UpdateMyProfileRequest;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.UserDirectoryItemDto;
 import edu.courseflow.usermanagement.dto.UserProfileDtos.UserProfileDto;
@@ -90,10 +91,15 @@ public class UserProfileController {
     }
 
     @GetMapping("/backoffice/admin-users")
-    public List<AdminUserDto> adminDirectory(
+    public Object adminDirectory(
             CurrentUser caller,
             @RequestParam(name = "q", required = false) String query,
-            @RequestParam(name = "limit", defaultValue = "100") int limit) {
+            @RequestParam(name = "limit", defaultValue = "100") int limit,
+            @RequestParam(name = "page", required = false) Integer page,
+            @RequestParam(name = "size", required = false) Integer size) {
+        if (page != null || size != null) {
+            return profiles.adminDirectoryPage(caller, query, page, size);
+        }
         return profiles.adminDirectory(caller, query, limit);
     }
 
@@ -122,5 +128,12 @@ public class UserProfileController {
             @PathVariable Long userId,
             @Valid @RequestBody DeactivateAdminUserRequest request) {
         return profiles.deactivateAdminUser(caller, userId, request);
+    }
+
+    @PostMapping("/backoffice/admin-users/{userId}/reactivate")
+    public AdminUserDto reactivateAdminUser(CurrentUser caller,
+            @PathVariable Long userId,
+            @Valid @RequestBody ReactivateAdminUserRequest request) {
+        return profiles.reactivateAdminUser(caller, userId, request);
     }
 }
